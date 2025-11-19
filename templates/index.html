@@ -3,55 +3,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Market Trend Predictor</title>
+    <title>Vibe Stock Market Predictor</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>📈 Stock Market Trend Predictor</h1>
-            <p class="subtitle">Analyze stock trends with technical indicators to identify investment opportunities</p>
+            <h1>📈 Vibe Stock Market Predictor</h1>
+            <p class="subtitle">AI-powered trading with intelligent machine traders</p>
         </header>
 
-        <div class="input-section">
-            <div class="input-group">
-                <input type="text" id="tickerInput" placeholder="Enter stock tickers (e.g., AAPL, TSLA, MSFT)" />
-                <button id="analyzeBtn" onclick="analyzeStocks()">Analyze Stocks</button>
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('analysis')">Stock Analysis</button>
+            <button class="tab-btn" onclick="switchTab('traders')">Machine Traders</button>
+        </div>
+
+        <!-- Stock Analysis Tab -->
+        <div id="analysis-tab" class="tab-content active">
+            <div class="input-section">
+                <div class="input-group">
+                    <input type="text" id="tickerInput" placeholder="Enter stock tickers (e.g., AAPL, TSLA, MSFT)" />
+                    <button id="analyzeBtn" onclick="analyzeStocks()">Analyze Stocks</button>
+                </div>
+                <div class="quick-picks">
+                    <span>Quick picks:</span>
+                    <button class="quick-btn" onclick="setTickers('AAPL,MSFT,GOOGL')">Tech Giants</button>
+                    <button class="quick-btn" onclick="setTickers('TSLA,NIO,RIVN')">EV Stocks</button>
+                    <button class="quick-btn" onclick="setTickers('JPM,BAC,WFC')">Banks</button>
+                    <button class="quick-btn" onclick="setTickers('NVDA,AMD,INTC')">Semiconductors</button>
+                </div>
             </div>
-            <div class="quick-picks">
-                <span>Quick picks:</span>
-                <button class="quick-btn" onclick="setTickers('AAPL,MSFT,GOOGL')">Tech Giants</button>
-                <button class="quick-btn" onclick="setTickers('TSLA,NIO,RIVN')">EV Stocks</button>
-                <button class="quick-btn" onclick="setTickers('JPM,BAC,WFC')">Banks</button>
-                <button class="quick-btn" onclick="setTickers('NVDA,AMD,INTC')">Semiconductors</button>
+
+            <div id="loading" class="loading" style="display: none;">
+                <div class="spinner"></div>
+                <p>Analyzing stock trends...</p>
+            </div>
+
+            <div id="results" class="results-container"></div>
+
+            <div class="info-section">
+                <h3>📊 How It Works</h3>
+                <div class="indicators-grid">
+                    <div class="indicator-card">
+                        <h4>📈 Moving Averages (MA)</h4>
+                        <p>Tracks price trends over 20 and 50 days. Price above both MAs indicates an uptrend.</p>
+                    </div>
+                    <div class="indicator-card">
+                        <h4>💪 RSI (Relative Strength Index)</h4>
+                        <p>Measures momentum. Below 30 = oversold (buy opportunity), above 70 = overbought (sell signal).</p>
+                    </div>
+                    <div class="indicator-card">
+                        <h4>⚡ MACD</h4>
+                        <p>Shows momentum changes. Bullish crossover = buy signal, bearish crossover = sell signal.</p>
+                    </div>
+                    <div class="indicator-card">
+                        <h4>🚀 Momentum</h4>
+                        <p>10-day price change percentage. Positive momentum suggests continued growth.</p>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div id="loading" class="loading" style="display: none;">
-            <div class="spinner"></div>
-            <p>Analyzing stock trends...</p>
+        <!-- Machine Traders Tab -->
+        <div id="traders-tab" class="tab-content">
+            <!-- Trader Creation Section -->
+            <div class="trader-section">
+                <div class="section-header">
+                    <h2>🤖 Create New Trader</h2>
+                    <button class="primary-btn" onclick="showCreateTraderForm()">+ New Trader</button>
+                </div>
+
+                <!-- Create Trader Form (Initially Hidden) -->
+                <div id="create-trader-form" class="trader-form" style="display: none;">
+                    <div class="form-group">
+                        <label>Trader Name</label>
+                        <input type="text" id="traderName" placeholder="e.g., Bullish Betty, Cautious Carl" />
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Initial Balance ($)</label>
+                            <input type="number" id="initialBalance" value="10000" min="100" step="100" />
+                        </div>
+                        <div class="form-group">
+                            <label>Risk Tolerance</label>
+                            <select id="riskTolerance">
+                                <option value="low">Low - Conservative</option>
+                                <option value="medium" selected>Medium - Balanced</option>
+                                <option value="high">High - Aggressive</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Trading Ethos / Philosophy</label>
+                        <textarea id="tradingEthos" rows="4" placeholder="Describe this trader's philosophy, personality, and approach...&#10;&#10;Examples:&#10;- Bullish on tech stocks, focuses on growth companies&#10;- Bearish market outlook, prefers safe defensive stocks&#10;- Contrarian investor, buys when others panic&#10;- Momentum trader, rides the wave of trending stocks"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button class="secondary-btn" onclick="hideCreateTraderForm()">Cancel</button>
+                        <button class="primary-btn" onclick="createTrader()">Create Trader</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Traders List Section -->
+            <div class="trader-section">
+                <div class="section-header">
+                    <h2>📊 Active Traders</h2>
+                    <button class="secondary-btn" onclick="loadTraders()">🔄 Refresh</button>
+                </div>
+
+                <div id="traders-loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Loading traders...</p>
+                </div>
+
+                <div id="traders-list" class="traders-list"></div>
+            </div>
         </div>
+    </div>
 
-        <div id="results" class="results-container"></div>
-
-        <div class="info-section">
-            <h3>📊 How It Works</h3>
-            <div class="indicators-grid">
-                <div class="indicator-card">
-                    <h4>📈 Moving Averages (MA)</h4>
-                    <p>Tracks price trends over 20 and 50 days. Price above both MAs indicates an uptrend.</p>
+    <!-- Edit Trader Modal -->
+    <div id="edit-trader-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditModal()">&times;</span>
+            <h2>Edit Trader</h2>
+            <div id="edit-trader-form" class="trader-form">
+                <input type="hidden" id="editTraderId" />
+                <div class="form-group">
+                    <label>Trader Name</label>
+                    <input type="text" id="editTraderName" />
                 </div>
-                <div class="indicator-card">
-                    <h4>💪 RSI (Relative Strength Index)</h4>
-                    <p>Measures momentum. Below 30 = oversold (buy opportunity), above 70 = overbought (sell signal).</p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Risk Tolerance</label>
+                        <select id="editRiskTolerance">
+                            <option value="low">Low - Conservative</option>
+                            <option value="medium">Medium - Balanced</option>
+                            <option value="high">High - Aggressive</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="editStatus">
+                            <option value="active">Active</option>
+                            <option value="paused">Paused</option>
+                            <option value="disabled">Disabled</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="indicator-card">
-                    <h4>⚡ MACD</h4>
-                    <p>Shows momentum changes. Bullish crossover = buy signal, bearish crossover = sell signal.</p>
+                <div class="form-group">
+                    <label>Trading Ethos / Philosophy</label>
+                    <textarea id="editTradingEthos" rows="4"></textarea>
                 </div>
-                <div class="indicator-card">
-                    <h4>🚀 Momentum</h4>
-                    <p>10-day price change percentage. Positive momentum suggests continued growth.</p>
+                <div class="form-actions">
+                    <button class="secondary-btn" onclick="closeEditModal()">Cancel</button>
+                    <button class="primary-btn" onclick="updateTrader()">Save Changes</button>
                 </div>
             </div>
         </div>

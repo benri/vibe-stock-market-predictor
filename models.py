@@ -34,6 +34,7 @@ class Trader(db.Model):
     # Trading strategy parameters
     strategy_name = db.Column(db.String(50), nullable=False, default='default')
     risk_tolerance = db.Column(db.String(20), nullable=False, default='medium')  # low, medium, high
+    trading_ethos = db.Column(db.Text, nullable=True)  # Free-form text for trading philosophy (bullish, bearish, etc.)
 
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -56,6 +57,7 @@ class Trader(db.Model):
             'current_balance': float(self.current_balance),
             'strategy_name': self.strategy_name,
             'risk_tolerance': self.risk_tolerance,
+            'trading_ethos': self.trading_ethos,
             'created_at': self.created_at.isoformat(),
             'last_trade_at': self.last_trade_at.isoformat() if self.last_trade_at else None,
             'total_trades': self.trades.count(),

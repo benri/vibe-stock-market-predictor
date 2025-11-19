@@ -274,6 +274,7 @@ def traders():
             current_balance=data.get('initial_balance', 10000.00),
             strategy_name=data.get('strategy_name', 'default'),
             risk_tolerance=data.get('risk_tolerance', 'medium'),
+            trading_ethos=data.get('trading_ethos'),
             status=TraderStatus.ACTIVE
         )
 
@@ -304,6 +305,8 @@ def trader_detail(trader_id):
             trader.strategy_name = data['strategy_name']
         if 'risk_tolerance' in data:
             trader.risk_tolerance = data['risk_tolerance']
+        if 'trading_ethos' in data:
+            trader.trading_ethos = data['trading_ethos']
 
         db.session.commit()
         logger.info(f"Updated trader: {trader.name}")
