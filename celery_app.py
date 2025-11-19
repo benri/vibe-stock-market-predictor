@@ -1,4 +1,5 @@
 import os
+import ssl
 from celery import Celery
 from celery.schedules import crontab
 from dotenv import load_dotenv
@@ -8,6 +9,19 @@ load_dotenv()
 
 # Get Redis URL from environment
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+
+# Configure SSL for Redis if using rediss:// (Heroku Redis)
+broker_use_ssl = None
+redis_backend_use_ssl = None
+
+if REDIS_URL and REDIS_URL.startswith('rediss://'):
+    # SSL configuration for Heroku Redis
+    broker_use_ssl = {
+        'ssl_cert_reqs': ssl.CERT_NONE
+    }
+    redis_backend_use_ssl = {
+        'ssl_cert_reqs': ssl.CERT_NONE
+    }
 
 # Create Celery app
 celery_app = Celery(
@@ -29,6 +43,8 @@ celery_app.conf.update(
     task_track_started=True,
     task_time_limit=300,  # 5 minutes
     task_soft_time_limit=240,  # 4 minutes soft limit
+    broker_use_ssl=broker_use_ssl,
+    redis_backend_use_ssl=redis_backend_use_ssl,
 )
 
 # Celery Beat schedule for automated trading
