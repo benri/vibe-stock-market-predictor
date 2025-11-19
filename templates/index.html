@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Market Trend Predictor</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📈 Stock Market Trend Predictor</h1>
+            <p class="subtitle">Analyze stock trends with technical indicators to identify investment opportunities</p>
+        </header>
+
+        <div class="input-section">
+            <div class="input-group">
+                <input type="text" id="tickerInput" placeholder="Enter stock tickers (e.g., AAPL, TSLA, MSFT)" />
+                <button id="analyzeBtn" onclick="analyzeStocks()">Analyze Stocks</button>
+            </div>
+            <div class="quick-picks">
+                <span>Quick picks:</span>
+                <button class="quick-btn" onclick="setTickers('AAPL,MSFT,GOOGL')">Tech Giants</button>
+                <button class="quick-btn" onclick="setTickers('TSLA,NIO,RIVN')">EV Stocks</button>
+                <button class="quick-btn" onclick="setTickers('JPM,BAC,WFC')">Banks</button>
+                <button class="quick-btn" onclick="setTickers('NVDA,AMD,INTC')">Semiconductors</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Analyzing stock trends...</p>
+        </div>
+
+        <div id="results" class="results-container"></div>
+
+        <div class="info-section">
+            <h3>📊 How It Works</h3>
+            <div class="indicators-grid">
+                <div class="indicator-card">
+                    <h4>📈 Moving Averages (MA)</h4>
+                    <p>Tracks price trends over 20 and 50 days. Price above both MAs indicates an uptrend.</p>
+                </div>
+                <div class="indicator-card">
+                    <h4>💪 RSI (Relative Strength Index)</h4>
+                    <p>Measures momentum. Below 30 = oversold (buy opportunity), above 70 = overbought (sell signal).</p>
+                </div>
+                <div class="indicator-card">
+                    <h4>⚡ MACD</h4>
+                    <p>Shows momentum changes. Bullish crossover = buy signal, bearish crossover = sell signal.</p>
+                </div>
+                <div class="indicator-card">
+                    <h4>🚀 Momentum</h4>
+                    <p>10-day price change percentage. Positive momentum suggests continued growth.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

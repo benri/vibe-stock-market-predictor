@@ -1,0 +1,29 @@
+# Cursor Configuration for Stock Market Predictor
+
+## Project Description
+
+This is a stock market trend predictor in order for users to see which investments will help make them money in trading.
+
+- Includes helpful technical analysis
+- Stunning UI
+- Beginner friendly
+
+## Project Architecture
+
+- Python backend
+- Deployed to Heroku on CNB
+
+## Dependency Management
+- Use `mise` to manage and run dependencies for this project
+- Run commands through mise: `mise run <task>` or `mise exec -- <command>`
+- Python version is managed via mise (3.12)
+
+## Development Workflow
+- Use `mise run dev` to start the Flask development server
+- Use `mise run install` to install dependencies
+- Always use mise when running Python commands or installing packages
+
+## Testing
+- Typecheck when done making a series of code changes
+- Prefer running single tests, not the whole test suite, for performance
+

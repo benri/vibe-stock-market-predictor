@@ -1,0 +1,15 @@
+[tools]
+python = "3.12"
+
+[tasks.install]
+description = "Install Python dependencies"
+run = "pip install -r requirements.txt"
+
+[tasks.run]
+description = "Run the Flask development server"
+run = "python app.py"
+
+[tasks.dev]
+description = "Run the Flask development server with auto-reload"
+run = "flask run --reload --port=5001"
+
