@@ -7,6 +7,8 @@ import json
 import requests
 import logging
 from dotenv import load_dotenv
+from flask_migrate import Migrate
+from models import db, Trader, Trade, Portfolio, TraderStatus, TradeAction
 
 # Load environment variables
 load_dotenv()
@@ -17,11 +19,36 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# Database configuration
+DATABASE_URL = os.getenv('DATABASE_URL')
+if DATABASE_URL:
+    # Heroku uses postgres:// but SQLAlchemy requires postgresql://
+    if DATABASE_URL.startswith('postgres://'):
+        DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+else:
+    # Local development database
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://localhost/vibe_stock_predictor'
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+}
+
+# Initialize database
+db.init_app(app)
+migrate = Migrate(app, db)
+
 # Get Alpha Vantage API key
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 if not ALPHA_VANTAGE_API_KEY:
     logger.error("ALPHA_VANTAGE_API_KEY not found in environment variables!")
     raise ValueError("Please set ALPHA_VANTAGE_API_KEY in your .env file")
+
+# Create tables
+with app.app_context():
+    db.create_all()
 
 def calculate_technical_indicators(df):
     """Calculate technical indicators for trend analysis"""
@@ -221,6 +248,235 @@ def analyze():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/traders', methods=['GET', 'POST'])
+def traders():
+    """Get all traders or create a new trader"""
+    if request.method == 'GET':
+        traders = Trader.query.all()
+        return jsonify({'traders': [trader.to_dict() for trader in traders]})
+
+    elif request.method == 'POST':
+        data = request.get_json()
+
+        # Validate required fields
+        if not data.get('name'):
+            return jsonify({'error': 'Trader name is required'}), 400
+
+        # Check if trader name already exists
+        if Trader.query.filter_by(name=data['name']).first():
+            return jsonify({'error': 'Trader with this name already exists'}), 400
+
+        # Create new trader
+        trader = Trader(
+            name=data['name'],
+            initial_balance=data.get('initial_balance', 10000.00),
+            current_balance=data.get('initial_balance', 10000.00),
+            strategy_name=data.get('strategy_name', 'default'),
+            risk_tolerance=data.get('risk_tolerance', 'medium'),
+            status=TraderStatus.ACTIVE
+        )
+
+        db.session.add(trader)
+        db.session.commit()
+
+        logger.info(f"Created new trader: {trader.name} with ${trader.initial_balance}")
+        return jsonify(trader.to_dict()), 201
+
+
+@app.route('/api/traders/<int:trader_id>', methods=['GET', 'PUT', 'DELETE'])
+def trader_detail(trader_id):
+    """Get, update, or delete a specific trader"""
+    trader = Trader.query.get_or_404(trader_id)
+
+    if request.method == 'GET':
+        return jsonify(trader.to_dict())
+
+    elif request.method == 'PUT':
+        data = request.get_json()
+
+        # Update trader fields
+        if 'name' in data:
+            trader.name = data['name']
+        if 'status' in data:
+            trader.status = TraderStatus(data['status'])
+        if 'strategy_name' in data:
+            trader.strategy_name = data['strategy_name']
+        if 'risk_tolerance' in data:
+            trader.risk_tolerance = data['risk_tolerance']
+
+        db.session.commit()
+        logger.info(f"Updated trader: {trader.name}")
+        return jsonify(trader.to_dict())
+
+    elif request.method == 'DELETE':
+        db.session.delete(trader)
+        db.session.commit()
+        logger.info(f"Deleted trader: {trader.name}")
+        return jsonify({'message': 'Trader deleted successfully'}), 200
+
+
+@app.route('/api/traders/<int:trader_id>/trades', methods=['GET', 'POST'])
+def trader_trades(trader_id):
+    """Get all trades for a trader or execute a new trade"""
+    trader = Trader.query.get_or_404(trader_id)
+
+    if request.method == 'GET':
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+
+        # Get trades with pagination
+        trades_pagination = Trade.query.filter_by(trader_id=trader_id)\
+            .order_by(Trade.executed_at.desc())\
+            .paginate(page=page, per_page=per_page, error_out=False)
+
+        return jsonify({
+            'trades': [trade.to_dict() for trade in trades_pagination.items],
+            'total': trades_pagination.total,
+            'pages': trades_pagination.pages,
+            'current_page': page
+        })
+
+    elif request.method == 'POST':
+        data = request.get_json()
+
+        # Validate required fields
+        required_fields = ['ticker', 'action', 'quantity', 'price']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'{field} is required'}), 400
+
+        # Check trader status
+        if trader.status != TraderStatus.ACTIVE:
+            return jsonify({'error': 'Trader is not active'}), 400
+
+        action = TradeAction(data['action'])
+        quantity = int(data['quantity'])
+        price = float(data['price'])
+        total_amount = quantity * price
+
+        # Validate trade
+        if action == TradeAction.BUY:
+            if trader.current_balance < total_amount:
+                return jsonify({'error': 'Insufficient balance for this trade'}), 400
+        elif action == TradeAction.SELL:
+            # Check if trader owns enough shares
+            portfolio_item = Portfolio.query.filter_by(
+                trader_id=trader_id,
+                ticker=data['ticker']
+            ).first()
+
+            if not portfolio_item or portfolio_item.quantity < quantity:
+                return jsonify({'error': 'Insufficient shares to sell'}), 400
+
+        # Execute trade
+        if action == TradeAction.BUY:
+            trader.current_balance -= total_amount
+
+            # Update portfolio
+            portfolio_item = Portfolio.query.filter_by(
+                trader_id=trader_id,
+                ticker=data['ticker']
+            ).first()
+
+            if portfolio_item:
+                # Update existing position
+                new_total_cost = portfolio_item.total_cost + total_amount
+                new_quantity = portfolio_item.quantity + quantity
+                portfolio_item.average_price = new_total_cost / new_quantity
+                portfolio_item.total_cost = new_total_cost
+                portfolio_item.quantity = new_quantity
+            else:
+                # Create new position
+                portfolio_item = Portfolio(
+                    trader_id=trader_id,
+                    ticker=data['ticker'],
+                    quantity=quantity,
+                    average_price=price,
+                    total_cost=total_amount
+                )
+                db.session.add(portfolio_item)
+
+        elif action == TradeAction.SELL:
+            trader.current_balance += total_amount
+
+            # Update portfolio
+            portfolio_item = Portfolio.query.filter_by(
+                trader_id=trader_id,
+                ticker=data['ticker']
+            ).first()
+
+            portfolio_item.quantity -= quantity
+            portfolio_item.total_cost -= (portfolio_item.average_price * quantity)
+
+            # Remove position if quantity is 0
+            if portfolio_item.quantity == 0:
+                db.session.delete(portfolio_item)
+
+        # Create trade record
+        trade = Trade(
+            trader_id=trader_id,
+            ticker=data['ticker'],
+            action=action,
+            quantity=quantity,
+            price=price,
+            total_amount=total_amount,
+            balance_after=trader.current_balance,
+            rsi=data.get('rsi'),
+            macd=data.get('macd'),
+            sma_20=data.get('sma_20'),
+            sma_50=data.get('sma_50'),
+            recommendation=data.get('recommendation'),
+            confidence=data.get('confidence'),
+            notes=data.get('notes')
+        )
+
+        trader.last_trade_at = datetime.utcnow()
+
+        db.session.add(trade)
+        db.session.commit()
+
+        logger.info(f"Executed trade: {trade}")
+        return jsonify(trade.to_dict()), 201
+
+
+@app.route('/api/traders/<int:trader_id>/portfolio', methods=['GET'])
+def trader_portfolio(trader_id):
+    """Get current portfolio for a trader"""
+    trader = Trader.query.get_or_404(trader_id)
+    portfolio_items = Portfolio.query.filter_by(trader_id=trader_id).all()
+
+    return jsonify({
+        'trader_id': trader_id,
+        'trader_name': trader.name,
+        'current_balance': float(trader.current_balance),
+        'portfolio': [item.to_dict() for item in portfolio_items]
+    })
+
+
+@app.route('/api/trades', methods=['GET'])
+def all_trades():
+    """Get all trades across all traders"""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    ticker = request.args.get('ticker', type=str)
+
+    query = Trade.query
+
+    if ticker:
+        query = query.filter_by(ticker=ticker.upper())
+
+    trades_pagination = query.order_by(Trade.executed_at.desc())\
+        .paginate(page=page, per_page=per_page, error_out=False)
+
+    return jsonify({
+        'trades': [trade.to_dict() for trade in trades_pagination.items],
+        'total': trades_pagination.total,
+        'pages': trades_pagination.pages,
+        'current_page': page
+    })
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
