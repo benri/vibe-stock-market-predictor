@@ -202,10 +202,10 @@ def execute_all_trader_decisions(time_of_day='morning'):
                     # Execute trade based on decision
                     if decision['action'] == 'buy':
                         # Determine quantity based on account balance and risk tolerance
-                        max_investment = trader.current_balance * (0.15 if trader.risk_tolerance == 'high' else 0.10 if trader.risk_tolerance == 'medium' else 0.05)
+                        max_investment = float(trader.current_balance) * (0.15 if trader.risk_tolerance == 'high' else 0.10 if trader.risk_tolerance == 'medium' else 0.05)
                         quantity = int(max_investment / decision['current_price'])
 
-                        if quantity > 0 and trader.current_balance >= (quantity * decision['current_price']):
+                        if quantity > 0 and float(trader.current_balance) >= (quantity * decision['current_price']):
                             # Execute buy
                             price = decision['current_price']
                             total_amount = quantity * price
@@ -423,13 +423,13 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
                     # Execute trade based on decision
                     if decision['action'] == 'buy':
                         # Determine quantity based on account balance and risk tolerance
-                        max_investment = trader.current_balance * (
+                        max_investment = float(trader.current_balance) * (
                             0.15 if trader.risk_tolerance == 'high' else
                             0.10 if trader.risk_tolerance == 'medium' else 0.05
                         )
                         quantity = int(max_investment / decision['current_price'])
 
-                        if quantity > 0 and trader.current_balance >= (quantity * decision['current_price']):
+                        if quantity > 0 and float(trader.current_balance) >= (quantity * decision['current_price']):
                             # Execute buy
                             price = decision['current_price']
                             total_amount = quantity * price
