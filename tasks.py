@@ -116,8 +116,8 @@ def generate_trading_decision(df, ticker, trader):
         threshold_buy = 15
         threshold_sell = -15
     else:  # medium
-        threshold_buy = 25
-        threshold_sell = -25
+        threshold_buy = 18
+        threshold_sell = -18
 
     # Determine action
     if score >= threshold_buy:
