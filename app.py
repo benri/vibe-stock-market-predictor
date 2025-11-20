@@ -9,7 +9,7 @@ import requests
 import logging
 from dotenv import load_dotenv
 from flask_migrate import Migrate
-from models import db, Trader, Trade, Portfolio, TraderStatus, TradeAction
+from models import db, Trader, Trade, Portfolio, TraderStatus, TradeAction, TickerPrice
 from functools import wraps
 
 # Load environment variables
