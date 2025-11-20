@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, jsonify
 from alpha_vantage.timeseries import TimeSeries
 import pandas as pd
 from datetime import datetime, timedelta
+from decimal import Decimal
 import json
 import requests
 import logging
@@ -390,7 +391,7 @@ def trader_trades(trader_id):
 
         # Execute trade
         if action == TradeAction.BUY:
-            trader.current_balance -= total_amount
+            trader.current_balance -= Decimal(str(total_amount))
 
             # Update portfolio
             portfolio_item = Portfolio.query.filter_by(
@@ -417,7 +418,7 @@ def trader_trades(trader_id):
                 db.session.add(portfolio_item)
 
         elif action == TradeAction.SELL:
-            trader.current_balance += total_amount
+            trader.current_balance += Decimal(str(total_amount))
 
             # Update portfolio
             portfolio_item = Portfolio.query.filter_by(

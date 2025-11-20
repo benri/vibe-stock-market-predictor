@@ -52,7 +52,7 @@ class Trader(db.Model):
         return f'<Trader {self.name} - ${self.current_balance}>'
 
     def to_dict(self):
-        """Convert trader to dictionary with market-value based P/L"""
+        """Convert trader to dictionary with market-value based P/L and detailed performance metrics"""
         portfolio_items = self.portfolio.all()
 
         # Calculate portfolio value using current market prices from ticker_prices table
@@ -75,6 +75,56 @@ class Trader(db.Model):
         total_value = float(self.current_balance) + portfolio_market_value
         unrealized_pl = portfolio_market_value - portfolio_cost_basis
 
+        # Calculate detailed performance metrics from trade history
+        all_trades = self.trades.all()
+        buy_trades = [t for t in all_trades if t.action == TradeAction.BUY]
+        sell_trades = [t for t in all_trades if t.action == TradeAction.SELL]
+
+        # Calculate realized P/L by comparing sell prices to average buy prices per ticker
+        realized_pl = 0
+        ticker_buy_history = {}  # Track buy prices per ticker for realized P/L calculation
+
+        for trade in all_trades:
+            if trade.action == TradeAction.BUY:
+                if trade.ticker not in ticker_buy_history:
+                    ticker_buy_history[trade.ticker] = []
+                ticker_buy_history[trade.ticker].append({
+                    'price': float(trade.price),
+                    'quantity': trade.quantity
+                })
+            elif trade.action == TradeAction.SELL:
+                # Calculate realized gain/loss for this sell
+                if trade.ticker in ticker_buy_history and ticker_buy_history[trade.ticker]:
+                    # Calculate average buy price for this ticker
+                    total_cost = sum(h['price'] * h['quantity'] for h in ticker_buy_history[trade.ticker])
+                    total_qty = sum(h['quantity'] for h in ticker_buy_history[trade.ticker])
+                    avg_buy_price = total_cost / total_qty if total_qty > 0 else 0
+
+                    # Realized gain/loss = (sell_price - avg_buy_price) * quantity_sold
+                    trade_pl = (float(trade.price) - avg_buy_price) * trade.quantity
+                    realized_pl += trade_pl
+
+        # Calculate win rate (profitable trades vs total trades)
+        winning_trades = 0
+        losing_trades = 0
+
+        for trade in sell_trades:
+            if trade.ticker in ticker_buy_history and ticker_buy_history[trade.ticker]:
+                total_cost = sum(h['price'] * h['quantity'] for h in ticker_buy_history[trade.ticker])
+                total_qty = sum(h['quantity'] for h in ticker_buy_history[trade.ticker])
+                avg_buy_price = total_cost / total_qty if total_qty > 0 else 0
+
+                if float(trade.price) > avg_buy_price:
+                    winning_trades += 1
+                else:
+                    losing_trades += 1
+
+        win_rate = (winning_trades / len(sell_trades) * 100) if sell_trades else 0
+
+        # Calculate average trade sizes
+        avg_buy_amount = sum(float(t.total_amount) for t in buy_trades) / len(buy_trades) if buy_trades else 0
+        avg_sell_amount = sum(float(t.total_amount) for t in sell_trades) / len(sell_trades) if sell_trades else 0
+
         return {
             'id': self.id,
             'name': self.name,
@@ -84,6 +134,8 @@ class Trader(db.Model):
             'portfolio_value': portfolio_market_value,
             'portfolio_cost_basis': portfolio_cost_basis,
             'unrealized_pl': unrealized_pl,
+            'unrealized_pl_percentage': (unrealized_pl / portfolio_cost_basis * 100) if portfolio_cost_basis > 0 else 0,
+            'realized_pl': realized_pl,
             'total_value': total_value,
             'strategy_name': self.strategy_name,
             'risk_tolerance': self.risk_tolerance,
@@ -91,7 +143,14 @@ class Trader(db.Model):
             'trading_timezone': self.trading_timezone,
             'created_at': self.created_at.isoformat(),
             'last_trade_at': self.last_trade_at.isoformat() if self.last_trade_at else None,
-            'total_trades': self.trades.count(),
+            'total_trades': len(all_trades),
+            'buy_trades': len(buy_trades),
+            'sell_trades': len(sell_trades),
+            'winning_trades': winning_trades,
+            'losing_trades': losing_trades,
+            'win_rate': win_rate,
+            'avg_buy_amount': avg_buy_amount,
+            'avg_sell_amount': avg_sell_amount,
             'profit_loss': total_value - float(self.initial_balance),
             'profit_loss_percentage': float((total_value - float(self.initial_balance)) / float(self.initial_balance) * 100) if self.initial_balance > 0 else 0
         }

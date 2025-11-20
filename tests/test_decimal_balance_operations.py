@@ -12,14 +12,14 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime
 
 
-def test_buy_operation_with_decimal_balance(client, app):
+def test_buy_operation_with_decimal_balance(client, app, db):
     """Test that buy operations handle Decimal balance correctly"""
-    from models import db, Trader, TraderStatus
+    from models import Trader, TraderStatus
 
     with app.app_context():
         # Create trader with Decimal balance
         trader = Trader(
-            name='Test Trader',
+            name='Decimal Test Buyer',
             initial_balance=Decimal('10000.00'),
             current_balance=Decimal('10000.00'),
             risk_tolerance='medium',
@@ -62,14 +62,14 @@ def test_buy_operation_with_decimal_balance(client, app):
             assert trader_after.current_balance <= Decimal('10000.00')
 
 
-def test_sell_operation_with_decimal_balance(client, app):
+def test_sell_operation_with_decimal_balance(client, app, db):
     """Test that sell operations handle Decimal balance correctly"""
-    from models import db, Trader, Portfolio, TraderStatus
+    from models import Trader, Portfolio, TraderStatus
 
     with app.app_context():
         # Create trader with Decimal balance and existing position
         trader = Trader(
-            name='Test Seller',
+            name='Decimal Test Seller',
             initial_balance=Decimal('10000.00'),
             current_balance=Decimal('5000.00'),
             risk_tolerance='medium',
@@ -165,14 +165,14 @@ def test_decimal_precision_maintained(app):
         assert abs(new_balance - expected) < Decimal('0.01')
 
 
-def test_zero_quantity_does_not_error(client, app):
+def test_zero_quantity_does_not_error(client, app, db):
     """Test that zero quantity (insufficient funds) doesn't cause errors"""
-    from models import db, Trader, TraderStatus
+    from models import Trader, TraderStatus
 
     with app.app_context():
         # Create trader with very low balance
         trader = Trader(
-            name='Poor Trader',
+            name='Decimal Poor Trader',
             initial_balance=Decimal('10.00'),
             current_balance=Decimal('10.00'),
             risk_tolerance='medium',

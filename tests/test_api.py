@@ -283,7 +283,7 @@ class TestTradeEndpoints:
 
     def test_execute_trade_inactive_trader(self, client, db, sample_trader):
         """Test executing a trade with an inactive trader"""
-        sample_trader.status = TraderStatus.DISABLED
+        sample_trader.status = TraderStatus.PAUSED
         db.session.commit()
 
         trade_data = {
