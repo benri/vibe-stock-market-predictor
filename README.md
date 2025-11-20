@@ -18,10 +18,6 @@ AI-powered stock market trend analysis with intelligent machine traders that aut
 - **Beautiful UI**: Responsive design with gradient styling and smooth animations
 - **Beginner Friendly**: Clear explanations of technical indicators and trading signals
 
-## 🚀 Live Demo
-
-Visit the live application: TODO
-
 ## 📸 Screenshots
 
 ### Stock Analysis
