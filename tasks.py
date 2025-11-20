@@ -171,6 +171,7 @@ def execute_all_trader_decisions(time_of_day='morning'):
             # Analyze each ticker
             for ticker in watchlist:
                 try:
+                    logger.info(f"Analyzing {ticker}...")
                     # Fetch stock data
                     df, _ = ts.get_daily(symbol=ticker, outputsize='full')
                     df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
@@ -181,8 +182,10 @@ def execute_all_trader_decisions(time_of_day='morning'):
                     df = df[df.index >= six_months_ago]
 
                     if df.empty or len(df) < 50:
-                        logger.warning(f"Insufficient data for {ticker}")
+                        logger.warning(f"Insufficient data for {ticker}: {len(df) if not df.empty else 0} rows")
                         continue
+
+                    logger.info(f"Fetched {len(df)} rows for {ticker}, calculating indicators...")
 
                     # Calculate indicators
                     df = calculate_technical_indicators(df)
@@ -191,7 +194,10 @@ def execute_all_trader_decisions(time_of_day='morning'):
                     decision = generate_trading_decision(df, ticker, trader)
 
                     if not decision:
+                        logger.warning(f"No decision generated for {ticker}")
                         continue
+
+                    logger.info(f"{ticker}: action={decision['action']}, confidence={decision['confidence']}%, price=${decision['current_price']}, signals={decision['signals'][:2] if len(decision['signals']) > 0 else 'none'}")
 
                     # Execute trade based on decision
                     if decision['action'] == 'buy':
@@ -386,6 +392,7 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
             # Analyze each ticker
             for ticker in watchlist:
                 try:
+                    logger.info(f"Analyzing {ticker}...")
                     # Fetch stock data
                     df, _ = ts.get_daily(symbol=ticker, outputsize='full')
                     df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
@@ -396,8 +403,10 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
                     df = df[df.index >= six_months_ago]
 
                     if df.empty or len(df) < 50:
-                        logger.warning(f"Insufficient data for {ticker}")
+                        logger.warning(f"Insufficient data for {ticker}: {len(df) if not df.empty else 0} rows")
                         continue
+
+                    logger.info(f"Fetched {len(df)} rows for {ticker}, calculating indicators...")
 
                     # Calculate indicators
                     df = calculate_technical_indicators(df)
@@ -406,7 +415,10 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
                     decision = generate_trading_decision(df, ticker, trader)
 
                     if not decision:
+                        logger.warning(f"No decision generated for {ticker}")
                         continue
+
+                    logger.info(f"{ticker}: action={decision['action']}, confidence={decision['confidence']}%, price=${decision['current_price']}, signals={decision['signals'][:2] if len(decision['signals']) > 0 else 'none'}")
 
                     # Execute trade based on decision
                     if decision['action'] == 'buy':
