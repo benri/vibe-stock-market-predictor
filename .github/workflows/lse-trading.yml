@@ -1,0 +1,69 @@
+name: LSE Trading Sessions
+
+on:
+  schedule:
+    # LSE Morning Session - 8:30 AM GMT
+    # Runs at 08:30 UTC Monday-Friday
+    - cron: '30 8 * * 1-5'
+
+    # LSE Midday Session - 12:00 PM GMT
+    # Runs at 12:00 UTC Monday-Friday
+    - cron: '0 12 * * 1-5'
+
+    # LSE Afternoon Session - 3:30 PM GMT
+    # Runs at 15:30 UTC Monday-Friday
+    - cron: '30 15 * * 1-5'
+
+  # Allow manual triggering for testing
+  workflow_dispatch:
+    inputs:
+      time_of_day:
+        description: 'Trading session (morning, midday, afternoon)'
+        required: true
+        default: 'morning'
+        type: choice
+        options:
+          - morning
+          - midday
+          - afternoon
+
+jobs:
+  execute-lse-trades:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine trading session
+        id: session
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "time_of_day=${{ github.event.inputs.time_of_day }}" >> $GITHUB_OUTPUT
+          else
+            HOUR=$(date -u +%H)
+            MINUTE=$(date -u +%M)
+            if [ "$HOUR" = "08" ]; then
+              echo "time_of_day=morning" >> $GITHUB_OUTPUT
+            elif [ "$HOUR" = "12" ]; then
+              echo "time_of_day=midday" >> $GITHUB_OUTPUT
+            else
+              echo "time_of_day=afternoon" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Execute LSE Trading
+        run: |
+          curl -X POST ${{ secrets.HEROKU_APP_URL }}/api/scheduled/execute-trades \
+            -H "X-API-Key: ${{ secrets.SCHEDULER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"timezone\": \"Europe/London\", \"time_of_day\": \"${{ steps.session.outputs.time_of_day }}\"}" \
+            -f -s -S -o response.json
+
+          echo "Response:"
+          cat response.json | jq '.'
+
+      - name: Check execution status
+        run: |
+          STATUS=$(cat response.json | jq -r '.status')
+          if [ "$STATUS" != "success" ]; then
+            echo "Trading execution failed!"
+            exit 1
+          fi
+          echo "Trading execution completed successfully"

@@ -9,6 +9,7 @@ import logging
 from dotenv import load_dotenv
 from flask_migrate import Migrate
 from models import db, Trader, Trade, Portfolio, TraderStatus, TradeAction
+from functools import wraps
 
 # Load environment variables
 load_dotenv()
@@ -16,6 +17,9 @@ load_dotenv()
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# API Key for scheduled tasks
+SCHEDULER_API_KEY = os.getenv('SCHEDULER_API_KEY', 'change-me-in-production')
 
 app = Flask(__name__)
 
@@ -157,6 +161,18 @@ def generate_signals(df, ticker):
         signals['confidence'] = 50 + abs(score)
 
     return signals
+
+def require_api_key(f):
+    """Decorator to require API key authentication for scheduled task endpoints"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+        if not api_key or api_key != SCHEDULER_API_KEY:
+            logger.warning(f"Unauthorized API access attempt from {request.remote_addr}")
+            return jsonify({'error': 'Unauthorized - Invalid API key'}), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 @app.route('/')
 def index():
@@ -478,6 +494,99 @@ def all_trades():
         'pages': trades_pagination.pages,
         'current_page': page
     })
+
+
+@app.route('/api/scheduled/execute-trades', methods=['POST'])
+@require_api_key
+def execute_scheduled_trades():
+    """
+    API endpoint to trigger trading execution for a specific timezone
+
+    Body params:
+        timezone: Trading timezone (e.g., 'America/New_York', 'Europe/London', 'Asia/Tokyo')
+        time_of_day: Trading session (e.g., 'morning', 'midday', 'afternoon', 'closing')
+
+    Example:
+        curl -X POST https://your-app.herokuapp.com/api/scheduled/execute-trades \
+             -H "X-API-Key: your-api-key" \
+             -H "Content-Type: application/json" \
+             -d '{"timezone": "America/New_York", "time_of_day": "morning"}'
+    """
+    try:
+        data = request.get_json() or {}
+        timezone = data.get('timezone', 'America/New_York')
+        time_of_day = data.get('time_of_day', 'morning')
+
+        logger.info(f"📊 Scheduled trade execution triggered: {timezone} - {time_of_day}")
+
+        # Import the task function directly
+        from tasks import execute_trader_decisions_by_timezone
+
+        # Execute the trading task synchronously
+        result = execute_trader_decisions_by_timezone(timezone, time_of_day)
+
+        logger.info(f"✅ Trade execution completed: {result.get('trades_executed', 0)} trades")
+
+        return jsonify({
+            'status': 'success',
+            'message': f'Executed {time_of_day} trades for {timezone}',
+            'result': result
+        }), 200
+
+    except Exception as e:
+        logger.error(f"❌ Error executing scheduled trades: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/scheduled/portfolio-health-check', methods=['POST'])
+@require_api_key
+def scheduled_portfolio_health_check():
+    """
+    API endpoint to trigger portfolio health check
+
+    Example:
+        curl -X POST https://your-app.herokuapp.com/api/scheduled/portfolio-health-check \
+             -H "X-API-Key: your-api-key"
+    """
+    try:
+        logger.info("📊 Portfolio health check triggered")
+
+        # Import the task function directly
+        from tasks import portfolio_health_check
+
+        # Execute the health check synchronously
+        result = portfolio_health_check()
+
+        logger.info(f"✅ Portfolio health check completed for {len(result.get('traders', []))} traders")
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Portfolio health check completed',
+            'result': result
+        }), 200
+
+    except Exception as e:
+        logger.error(f"❌ Error executing portfolio health check: {str(e)}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/scheduled/health', methods=['GET'])
+def scheduler_health():
+    """
+    Health check endpoint for scheduler to verify app is running
+    No authentication required for health checks
+    """
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'message': 'Scheduled task endpoint is operational'
+    }), 200
 
 
 if __name__ == '__main__':

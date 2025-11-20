@@ -1,0 +1,40 @@
+name: Portfolio Health Check
+
+on:
+  schedule:
+    # Daily portfolio health check - 4:30 PM EST (after NYSE close)
+    # Runs at 21:30 UTC (4:30 PM EST) Monday-Friday
+    - cron: '30 21 * * 1-5'
+
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+jobs:
+  portfolio-health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute Portfolio Health Check
+        run: |
+          curl -X POST ${{ secrets.HEROKU_APP_URL }}/api/scheduled/portfolio-health-check \
+            -H "X-API-Key: ${{ secrets.SCHEDULER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -f -s -S -o response.json
+
+          echo "Response:"
+          cat response.json | jq '.'
+
+      - name: Check execution status
+        run: |
+          STATUS=$(cat response.json | jq -r '.status')
+          if [ "$STATUS" != "success" ]; then
+            echo "Portfolio health check failed!"
+            exit 1
+          fi
+
+          TRADER_COUNT=$(cat response.json | jq -r '.result.traders | length')
+          echo "Portfolio health check completed successfully for $TRADER_COUNT traders"
+
+      - name: Display trader summaries
+        run: |
+          echo "Trader Performance Summary:"
+          cat response.json | jq -r '.result.traders[] | "- \(.trader_name): Total Value $\(.total_value) (P/L: \(.profit_loss_pct)%)"'
