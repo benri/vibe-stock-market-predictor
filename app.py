@@ -28,7 +28,7 @@ if DATABASE_URL:
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 else:
     # Local development database
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://localhost/vibe_stock_predictor'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://localhost/vibe-stock-market-predictor-development'
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {

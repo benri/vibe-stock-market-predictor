@@ -74,25 +74,26 @@ Create and manage virtual traders with unique personalities:
    Edit `.env` and add your API keys:
    ```
    ALPHA_VANTAGE_API_KEY=your_api_key_here
-   DATABASE_URL=postgresql://localhost/vibe_stock_predictor
+   DATABASE_URL=postgresql://localhost/vibe-stock-market-predictor-development
    REDIS_URL=redis://localhost:6379/0
    ```
 
-4. **Create the database**
+4. **Create and initialize the database**
    ```bash
-   createdb vibe_stock_predictor
+   # Create the PostgreSQL database
+   ./create_db.sh
+
+   # Set up database tables
+   python setup_db.py
    ```
 
-5. **Initialize the database**
+   Or manually:
    ```bash
-   python
-   >>> from app import app, db
-   >>> with app.app_context():
-   ...     db.create_all()
-   >>> exit()
+   createdb vibe-stock-market-predictor-development
+   python setup_db.py
    ```
 
-6. **Run the application**
+5. **Run the application**
 
    Terminal 1 - Web Server:
    ```bash
@@ -109,7 +110,7 @@ Create and manage virtual traders with unique personalities:
    celery -A celery_app beat --loglevel=info
    ```
 
-7. **Open your browser**
+6. **Open your browser**
    ```
    http://localhost:5000
    ```
@@ -227,16 +228,37 @@ vibe-stock-market-predictor/
 ├── celery_app.py          # Celery configuration and scheduling
 ├── tasks.py               # Automated trading tasks
 ├── requirements.txt       # Python dependencies
-├── Procfile              # Heroku process types
-├── runtime.txt           # Python version
-├── .env.example          # Environment variables template
-├── CLAUDE.md             # Technical documentation for developers
+├── Procfile               # Heroku process types
+├── runtime.txt            # Python version
+├── .env.example           # Environment variables template
+├── CLAUDE.md              # Technical documentation for developers
+├── README.md              # This file
+├── create_db.sh           # Database creation script
+├── setup_db.py            # Database initialization script
+├── release.sh             # Heroku release phase script
 ├── static/
-│   ├── app.js           # Frontend JavaScript
-│   └── style.css        # Styling and animations
+│   ├── app.js            # Frontend JavaScript
+│   └── style.css         # Styling and animations
 └── templates/
-    └── index.html       # Main HTML template
+    └── index.html        # Main HTML template
 ```
+
+### Database Setup Scripts
+
+- **create_db.sh**: Creates the PostgreSQL database for local development
+  - Interactive script that checks if database exists
+  - Prompts before dropping existing database
+  - Works on macOS and Linux
+
+- **setup_db.py**: Initializes database tables and schema
+  - Creates all tables defined in models.py
+  - Shows database statistics after setup
+  - Provides helpful next-step instructions
+
+- **release.sh**: Heroku release phase script
+  - Runs automatically during deployment
+  - Ensures database is set up before app starts
+  - Part of Heroku's deployment pipeline
 
 ## 🔑 Environment Variables
 
