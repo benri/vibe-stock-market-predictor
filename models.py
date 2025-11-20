@@ -1,41 +1,44 @@
-from flask_sqlalchemy import SQLAlchemy
+"""
+Database models for Vibe Stock Market Predictor
+"""
+
 from datetime import datetime
-from sqlalchemy import Enum
-import enum
+from enum import Enum
+from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
 
-class TraderStatus(enum.Enum):
+class TraderStatus(Enum):
     """Status of a trader"""
-    ACTIVE = "active"
-    PAUSED = "paused"
-    DISABLED = "disabled"
+    ACTIVE = 'active'
+    PAUSED = 'paused'
+    ARCHIVED = 'archived'
 
 
-class TradeAction(enum.Enum):
+class TradeAction(Enum):
     """Type of trade action"""
-    BUY = "buy"
-    SELL = "sell"
+    BUY = 'buy'
+    SELL = 'sell'
 
 
 class Trader(db.Model):
-    """Machine trader with virtual account balance"""
+    """Trader (bot) that executes trades"""
     __tablename__ = 'traders'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)
-    status = db.Column(Enum(TraderStatus), default=TraderStatus.ACTIVE, nullable=False)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    status = db.Column(db.Enum(TraderStatus), default=TraderStatus.ACTIVE, nullable=False)
 
-    # Virtual account balance
+    # Balance tracking
     initial_balance = db.Column(db.Numeric(12, 2), nullable=False, default=10000.00)
     current_balance = db.Column(db.Numeric(12, 2), nullable=False, default=10000.00)
 
-    # Trading strategy parameters
+    # Strategy
     strategy_name = db.Column(db.String(50), nullable=False, default='default')
-    risk_tolerance = db.Column(db.String(20), nullable=False, default='medium')  # low, medium, high
-    trading_ethos = db.Column(db.Text, nullable=True)  # Free-form text for trading philosophy (bullish, bearish, etc.)
-    trading_timezone = db.Column(db.String(50), nullable=False, default='America/New_York')  # Trading timezone (NYSE, LSE, TSE, etc.)
+    risk_tolerance = db.Column(db.String(20), nullable=False, default='medium')
+    trading_ethos = db.Column(db.Text, nullable=True)
+    trading_timezone = db.Column(db.String(50), nullable=False, default='America/New_York')
 
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -52,16 +55,18 @@ class Trader(db.Model):
         """Convert trader to dictionary with market-value based P/L"""
         portfolio_items = self.portfolio.all()
 
-        # Calculate portfolio value using cached current_price if available, else cost basis
+        # Calculate portfolio value using current market prices from ticker_prices table
         portfolio_market_value = 0
         portfolio_cost_basis = 0
         for item in portfolio_items:
             cost_basis = float(item.total_cost)
             portfolio_cost_basis += cost_basis
 
-            if item.current_price and item.quantity > 0:
-                # Use cached market price
-                market_value = float(item.current_price) * item.quantity
+            # Get current price from ticker_prices table
+            ticker_price = TickerPrice.query.filter_by(ticker=item.ticker).first()
+            if ticker_price and ticker_price.current_price and item.quantity > 0:
+                # Use latest market price
+                market_value = float(ticker_price.current_price) * item.quantity
                 portfolio_market_value += market_value
             else:
                 # Fallback to cost basis if no current price
@@ -101,23 +106,23 @@ class Trade(db.Model):
 
     # Trade details
     ticker = db.Column(db.String(10), nullable=False, index=True)
-    action = db.Column(Enum(TradeAction), nullable=False)
+    action = db.Column(db.Enum(TradeAction), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     price = db.Column(db.Numeric(10, 2), nullable=False)
     total_amount = db.Column(db.Numeric(12, 2), nullable=False)
 
-    # Account balance after trade
+    # Balance after trade
     balance_after = db.Column(db.Numeric(12, 2), nullable=False)
 
-    # Trading signals that led to this trade
-    rsi = db.Column(db.Numeric(5, 2), nullable=True)
+    # Technical indicators at time of trade
+    rsi = db.Column(db.Numeric(10, 2), nullable=True)
     macd = db.Column(db.Numeric(10, 2), nullable=True)
     sma_20 = db.Column(db.Numeric(10, 2), nullable=True)
     sma_50 = db.Column(db.Numeric(10, 2), nullable=True)
-    recommendation = db.Column(db.String(20), nullable=True)
-    confidence = db.Column(db.Integer, nullable=True)
 
-    # Notes
+    # Decision metadata
+    recommendation = db.Column(db.String(10), nullable=True)
+    confidence = db.Column(db.Numeric(5, 2), nullable=True)
     notes = db.Column(db.Text, nullable=True)
 
     # Timestamp
@@ -146,7 +151,7 @@ class Trade(db.Model):
             'sma_20': float(self.sma_20) if self.sma_20 else None,
             'sma_50': float(self.sma_50) if self.sma_50 else None,
             'recommendation': self.recommendation,
-            'confidence': self.confidence,
+            'confidence': float(self.confidence) if self.confidence else None,
             'notes': self.notes,
             'executed_at': self.executed_at.isoformat()
         }
@@ -164,10 +169,6 @@ class Portfolio(db.Model):
     quantity = db.Column(db.Integer, nullable=False, default=0)
     average_price = db.Column(db.Numeric(10, 2), nullable=False)
     total_cost = db.Column(db.Numeric(12, 2), nullable=False)
-
-    # Market value (updated periodically)
-    current_price = db.Column(db.Numeric(10, 2), nullable=True)  # Latest market price
-    last_price_update = db.Column(db.DateTime, nullable=True)    # When price was last updated
 
     # Timestamps
     first_purchased_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -206,3 +207,23 @@ class Portfolio(db.Model):
             result['profit_loss_percentage'] = float((current_value - total_cost_float) / total_cost_float * 100) if total_cost_float > 0 else 0
 
         return result
+
+
+class TickerPrice(db.Model):
+    """Latest market prices for ticker symbols (single source of truth)"""
+    __tablename__ = 'ticker_prices'
+
+    ticker = db.Column(db.String(10), primary_key=True)
+    current_price = db.Column(db.Numeric(10, 2), nullable=False)
+    last_updated = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<TickerPrice {self.ticker}: ${self.current_price}>'
+
+    def to_dict(self):
+        """Convert ticker price to dictionary"""
+        return {
+            'ticker': self.ticker,
+            'current_price': float(self.current_price),
+            'last_updated': self.last_updated.isoformat()
+        }

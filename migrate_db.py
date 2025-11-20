@@ -74,28 +74,30 @@ def migrate_database():
             else:
                 print("✓ trading_timezone column already exists")
 
-            # Check if current_price column exists in portfolio table
+            # Check if ticker_prices table exists
             result = db.session.execute(text("""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name='portfolio' AND column_name='current_price'
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_name='ticker_prices'
             """))
 
             if result.fetchone() is None:
-                print("➕ Adding current_price and last_price_update columns to portfolio table...")
+                print("➕ Creating ticker_prices table (single source of truth for market prices)...")
                 db.session.execute(text("""
-                    ALTER TABLE portfolio
-                    ADD COLUMN current_price NUMERIC(10, 2),
-                    ADD COLUMN last_price_update TIMESTAMP
+                    CREATE TABLE ticker_prices (
+                        ticker VARCHAR(10) PRIMARY KEY,
+                        current_price NUMERIC(10, 2) NOT NULL,
+                        last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
                 """))
                 db.session.execute(text("""
-                    CREATE INDEX IF NOT EXISTS idx_portfolio_last_price_update
-                    ON portfolio(last_price_update)
+                    CREATE INDEX idx_ticker_prices_last_updated
+                    ON ticker_prices(last_updated)
                 """))
                 db.session.commit()
-                print("✅ Added portfolio price tracking columns successfully!")
+                print("✅ Created ticker_prices table successfully!")
             else:
-                print("✓ current_price column already exists")
+                print("✓ ticker_prices table already exists")
 
             print("\n🎉 Database migration complete!")
 

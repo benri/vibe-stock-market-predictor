@@ -623,48 +623,58 @@ def portfolio_health_check():
 
 def update_portfolio_prices():
     """
-    Update current market prices for all portfolio holdings
+    Update current market prices for all tickers in ticker_prices table (single source of truth)
     This is called at the end of trading sessions to keep prices fresh
     """
     from app import app
-    from models import db, Portfolio
+    from models import db, Portfolio, TickerPrice
 
     with app.app_context():
-        logger.info("Updating portfolio prices...")
+        logger.info("Updating ticker prices...")
 
         # Get all unique tickers across all portfolios
-        portfolio_items = Portfolio.query.filter(Portfolio.quantity > 0).all()
+        unique_tickers = db.session.query(Portfolio.ticker).filter(Portfolio.quantity > 0).distinct().all()
+        tickers = [t[0] for t in unique_tickers]
 
-        if not portfolio_items:
-            logger.info("No portfolio items to update")
+        if not tickers:
+            logger.info("No tickers to update")
             return {'status': 'success', 'updated': 0}
 
         ts = TimeSeries(key=ALPHA_VANTAGE_API_KEY, output_format='json')
         updated_count = 0
         errors = []
 
-        for item in portfolio_items:
+        for ticker in tickers:
             try:
-                # Fetch current price
-                data, _ = ts.get_quote_endpoint(symbol=item.ticker)
+                # Fetch current price from API
+                data, _ = ts.get_quote_endpoint(symbol=ticker)
                 current_price = Decimal(str(data['05. price']))
 
-                # Update portfolio item
-                item.current_price = current_price
-                item.last_price_update = datetime.utcnow()
+                # Update or create ticker price entry (single source of truth)
+                ticker_price = TickerPrice.query.filter_by(ticker=ticker).first()
+                if ticker_price:
+                    ticker_price.current_price = current_price
+                    ticker_price.last_updated = datetime.utcnow()
+                else:
+                    ticker_price = TickerPrice(
+                        ticker=ticker,
+                        current_price=current_price,
+                        last_updated=datetime.utcnow()
+                    )
+                    db.session.add(ticker_price)
 
                 updated_count += 1
-                logger.info(f"Updated {item.ticker}: ${current_price}")
+                logger.info(f"Updated {ticker}: ${current_price}")
 
             except Exception as e:
-                error_msg = f"Error updating {item.ticker}: {str(e)}"
+                error_msg = f"Error updating {ticker}: {str(e)}"
                 logger.error(error_msg)
                 errors.append(error_msg)
 
         # Commit all updates
         db.session.commit()
 
-        logger.info(f"Updated prices for {updated_count} portfolio items")
+        logger.info(f"Updated prices for {updated_count} tickers")
 
         return {
             'status': 'success' if not errors else 'partial',
