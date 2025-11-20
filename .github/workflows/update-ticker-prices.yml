@@ -1,0 +1,35 @@
+name: Update Ticker Prices
+
+on:
+  schedule:
+    # Daily price update - 5:00 PM EST (after NYSE close at 4:00 PM)
+    # Runs at 22:00 UTC (5:00 PM EST) Monday-Friday
+    - cron: '0 22 * * 1-5'
+
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update Ticker Prices
+        run: |
+          curl -X POST ${{ secrets.HEROKU_APP_URL }}/api/scheduled/update-prices \
+            -H "X-API-Key: ${{ secrets.SCHEDULER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -f -s -S -o response.json
+
+          echo "Response:"
+          cat response.json | jq '.'
+
+      - name: Check execution status
+        run: |
+          STATUS=$(cat response.json | jq -r '.status')
+          if [ "$STATUS" != "success" ] && [ "$STATUS" != "partial" ]; then
+            echo "Price update failed!"
+            exit 1
+          fi
+
+          UPDATED_COUNT=$(cat response.json | jq -r '.result.updated')
+          echo "✅ Updated prices for $UPDATED_COUNT tickers"

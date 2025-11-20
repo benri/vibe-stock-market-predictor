@@ -576,6 +576,39 @@ def scheduled_portfolio_health_check():
         }), 500
 
 
+@app.route('/api/scheduled/update-prices', methods=['POST'])
+@require_api_key
+def scheduled_update_prices():
+    """
+    Update ticker prices in ticker_prices table
+    Triggered by GitHub Actions daily after market close
+
+    Example:
+        curl -X POST https://your-app.herokuapp.com/api/scheduled/update-prices \
+             -H "X-API-Key: your-api-key"
+    """
+    logger.info("📊 Scheduled price update triggered")
+
+    try:
+        from tasks import update_portfolio_prices
+        result = update_portfolio_prices()
+
+        logger.info(f"✅ Price update completed: {result}")
+
+        return jsonify({
+            'status': 'success',
+            'message': f"Updated prices for {result['updated']} tickers",
+            'result': result
+        }), 200
+
+    except Exception as e:
+        logger.error(f"❌ Error during price update: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
 @app.route('/api/scheduled/health', methods=['GET'])
 def scheduler_health():
     """
