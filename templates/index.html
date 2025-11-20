@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vibe Stock Market Predictor</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -176,6 +177,24 @@
                 <div class="form-actions">
                     <button class="secondary-btn" onclick="closeEditModal()">Cancel</button>
                     <button class="primary-btn" onclick="updateTrader()">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Charts Modal -->
+    <div id="charts-modal" class="modal">
+        <div class="modal-content modal-wide">
+            <span class="close" onclick="closeChartsModal()">&times;</span>
+            <h2 id="charts-trader-name">Trader Performance</h2>
+            <div class="charts-container">
+                <div class="chart-wrapper">
+                    <h3>Portfolio Value Over Time</h3>
+                    <canvas id="portfolioChart"></canvas>
+                </div>
+                <div class="chart-wrapper">
+                    <h3>Profit/Loss Over Time</h3>
+                    <canvas id="profitLossChart"></canvas>
                 </div>
             </div>
         </div>

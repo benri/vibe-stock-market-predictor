@@ -225,6 +225,10 @@ function displayTraders(traders) {
                 '</div>';
         }
 
+        const unrealizedClass = trader.unrealized_pl >= 0 ? 'positive' : 'negative';
+        const unrealizedSymbol = trader.unrealized_pl >= 0 ? '▲' : '▼';
+        const winRateClass = trader.win_rate >= 50 ? 'positive' : 'negative';
+
         const card = document.createElement('div');
         card.className = 'trader-card ' + trader.status;
         card.innerHTML = `
@@ -241,20 +245,36 @@ function displayTraders(traders) {
             </div>
             <div class="trader-stats">
                 <div class="stat">
-                    <div class="stat-label">Current Balance</div>
+                    <div class="stat-label">Cash Balance</div>
                     <div class="stat-value">$${trader.current_balance.toLocaleString()}</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-label">Profit/Loss</div>
+                    <div class="stat-label">Portfolio Value</div>
+                    <div class="stat-value">$${trader.portfolio_value.toLocaleString()}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Total Value</div>
+                    <div class="stat-value">$${trader.total_value.toLocaleString()}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Unrealized P/L</div>
+                    <div class="stat-value ${unrealizedClass}">${unrealizedSymbol} $${Math.abs(trader.unrealized_pl).toLocaleString()}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Total P/L</div>
                     <div class="stat-value ${profitLossClass}">${profitLossSymbol} $${Math.abs(trader.profit_loss).toLocaleString()}</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-label">Return</div>
+                    <div class="stat-label">Total Return</div>
                     <div class="stat-value ${profitLossClass}">${trader.profit_loss_percentage.toFixed(2)}%</div>
                 </div>
                 <div class="stat">
-                    <div class="stat-label">Total Trades</div>
-                    <div class="stat-value">${trader.total_trades}</div>
+                    <div class="stat-label">Trades (Buy/Sell)</div>
+                    <div class="stat-value">${trader.buy_trades}/${trader.sell_trades}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">Win Rate</div>
+                    <div class="stat-value ${winRateClass}">${trader.win_rate.toFixed(1)}%</div>
                 </div>
                 <div class="stat">
                     <div class="stat-label">Risk Tolerance</div>
@@ -354,61 +374,200 @@ async function deleteTrader(traderId, traderName) {
     }
 }
 
+let portfolioChartInstance = null;
+let profitLossChartInstance = null;
+
 async function viewTraderDetails(traderId) {
     try {
-        const [traderRes, tradesRes, portfolioRes] = await Promise.all([
+        const [traderRes, historyRes] = await Promise.all([
             fetch(`/api/traders/${traderId}`),
-            fetch(`/api/traders/${traderId}/trades?per_page=10`),
-            fetch(`/api/traders/${traderId}/portfolio`)
+            fetch(`/api/traders/${traderId}/performance-history`)
         ]);
 
         const trader = await traderRes.json();
-        const tradesData = await tradesRes.json();
-        const portfolioData = await portfolioRes.json();
+        const history = await historyRes.json();
 
-        let detailsHtml = `
-            <h3>${trader.name} - Detailed View</h3>
-            <div class="trader-stats">
-                <div class="stat">
-                    <div class="stat-label">Initial Balance</div>
-                    <div class="stat-value">$${trader.initial_balance.toLocaleString()}</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">Current Balance</div>
-                    <div class="stat-value">$${trader.current_balance.toLocaleString()}</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">Total Trades</div>
-                    <div class="stat-value">${trader.total_trades}</div>
-                </div>
-                <div class="stat">
-                    <div class="stat-label">Profit/Loss</div>
-                    <div class="stat-value ${trader.profit_loss >= 0 ? 'positive' : 'negative'}">
-                        ${trader.profit_loss >= 0 ? '▲' : '▼'} $${Math.abs(trader.profit_loss).toLocaleString()}
-                    </div>
-                </div>
-            </div>
-        `;
+        // Set modal title
+        document.getElementById('charts-trader-name').textContent = `${trader.name} - Performance Charts`;
 
-        if (portfolioData.portfolio && portfolioData.portfolio.length > 0) {
-            detailsHtml += '<h4>Current Portfolio</h4><ul>';
-            portfolioData.portfolio.forEach(item => {
-                detailsHtml += `<li>${item.ticker}: ${item.quantity} shares @ avg $${item.average_price.toFixed(2)}</li>`;
-            });
-            detailsHtml += '</ul>';
+        // Show modal
+        document.getElementById('charts-modal').style.display = 'block';
+
+        // Destroy previous chart instances if they exist
+        if (portfolioChartInstance) {
+            portfolioChartInstance.destroy();
+        }
+        if (profitLossChartInstance) {
+            profitLossChartInstance.destroy();
         }
 
-        if (tradesData.trades && tradesData.trades.length > 0) {
-            detailsHtml += '<h4>Recent Trades</h4><ul>';
-            tradesData.trades.slice(0, 5).forEach(trade => {
-                detailsHtml += `<li>${trade.action.toUpperCase()} ${trade.quantity} ${trade.ticker} @ $${trade.price.toFixed(2)}</li>`;
-            });
-            detailsHtml += '</ul>';
-        }
+        // Create Portfolio Value Chart
+        const portfolioCtx = document.getElementById('portfolioChart').getContext('2d');
+        portfolioChartInstance = new Chart(portfolioCtx, {
+            type: 'line',
+            data: {
+                labels: history.labels,
+                datasets: [
+                    {
+                        label: 'Cash Balance',
+                        data: history.balance,
+                        borderColor: '#667eea',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Portfolio Value',
+                        data: history.portfolio_value,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Total Value',
+                        data: history.total_value,
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                label += '$' + context.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
 
-        alert(detailsHtml.replace(/<[^>]*>/g, '\n'));
+        // Create Profit/Loss Chart
+        const profitLossCtx = document.getElementById('profitLossChart').getContext('2d');
+        const plColors = history.profit_loss.map(val => val >= 0 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)');
+
+        profitLossChartInstance = new Chart(profitLossCtx, {
+            type: 'line',
+            data: {
+                labels: history.labels,
+                datasets: [
+                    {
+                        label: 'Profit/Loss',
+                        data: history.profit_loss,
+                        borderColor: function(context) {
+                            const value = context.parsed?.y;
+                            return value >= 0 ? '#10b981' : '#ef4444';
+                        },
+                        backgroundColor: function(context) {
+                            const value = context.parsed?.y;
+                            return value >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+                        },
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true,
+                        segment: {
+                            borderColor: function(ctx) {
+                                return ctx.p1.parsed.y >= 0 ? '#10b981' : '#ef4444';
+                            },
+                            backgroundColor: function(ctx) {
+                                return ctx.p1.parsed.y >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+                            }
+                        }
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                const value = context.parsed.y;
+                                label += (value >= 0 ? '+' : '') + '$' + value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: function(value) {
+                                return (value >= 0 ? '+' : '') + '$' + value.toLocaleString();
+                            }
+                        },
+                        grid: {
+                            color: function(context) {
+                                if (context.tick.value === 0) {
+                                    return '#000';
+                                }
+                                return 'rgba(0, 0, 0, 0.1)';
+                            },
+                            lineWidth: function(context) {
+                                if (context.tick.value === 0) {
+                                    return 2;
+                                }
+                                return 1;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
     } catch (error) {
-        alert('Error loading trader details: ' + error.message);
+        alert('Error loading trader charts: ' + error.message);
+    }
+}
+
+function closeChartsModal() {
+    document.getElementById('charts-modal').style.display = 'none';
+    // Destroy charts when closing
+    if (portfolioChartInstance) {
+        portfolioChartInstance.destroy();
+        portfolioChartInstance = null;
+    }
+    if (profitLossChartInstance) {
+        profitLossChartInstance.destroy();
+        profitLossChartInstance = null;
     }
 }
 

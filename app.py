@@ -474,6 +474,100 @@ def trader_portfolio(trader_id):
     })
 
 
+@app.route('/api/traders/<int:trader_id>/performance-history', methods=['GET'])
+def trader_performance_history(trader_id):
+    """Get historical performance data for charts"""
+    trader = Trader.query.get_or_404(trader_id)
+
+    # Get all trades in chronological order
+    trades = Trade.query.filter_by(trader_id=trader_id)\
+        .order_by(Trade.executed_at.asc()).all()
+
+    if not trades:
+        # Return initial state if no trades
+        return jsonify({
+            'labels': [trader.created_at.strftime('%Y-%m-%d %H:%M')],
+            'balance': [float(trader.initial_balance)],
+            'portfolio_value': [0],
+            'total_value': [float(trader.initial_balance)],
+            'profit_loss': [0],
+            'cumulative_trades': [0]
+        })
+
+    # Build time series data from trades
+    labels = []
+    balance_data = []
+    portfolio_value_data = []
+    total_value_data = []
+    profit_loss_data = []
+    cumulative_trades_data = []
+
+    # Track portfolio holdings over time
+    portfolio_holdings = {}  # {ticker: {'quantity': X, 'avg_price': Y}}
+
+    for idx, trade in enumerate(trades):
+        timestamp = trade.executed_at.strftime('%Y-%m-%d %H:%M')
+        labels.append(timestamp)
+
+        # Balance after this trade
+        balance_data.append(float(trade.balance_after))
+
+        # Update portfolio holdings
+        if trade.action == TradeAction.BUY:
+            if trade.ticker in portfolio_holdings:
+                # Update average price
+                old_qty = portfolio_holdings[trade.ticker]['quantity']
+                old_cost = old_qty * portfolio_holdings[trade.ticker]['avg_price']
+                new_cost = old_cost + float(trade.total_amount)
+                new_qty = old_qty + trade.quantity
+                portfolio_holdings[trade.ticker] = {
+                    'quantity': new_qty,
+                    'avg_price': new_cost / new_qty
+                }
+            else:
+                portfolio_holdings[trade.ticker] = {
+                    'quantity': trade.quantity,
+                    'avg_price': float(trade.price)
+                }
+        elif trade.action == TradeAction.SELL:
+            if trade.ticker in portfolio_holdings:
+                portfolio_holdings[trade.ticker]['quantity'] -= trade.quantity
+                if portfolio_holdings[trade.ticker]['quantity'] <= 0:
+                    del portfolio_holdings[trade.ticker]
+
+        # Calculate portfolio value (using current prices from ticker_prices table)
+        portfolio_value = 0
+        for ticker, holding in portfolio_holdings.items():
+            ticker_price = TickerPrice.query.filter_by(ticker=ticker).first()
+            if ticker_price:
+                portfolio_value += float(ticker_price.current_price) * holding['quantity']
+            else:
+                # Fallback to average price if no current price
+                portfolio_value += holding['avg_price'] * holding['quantity']
+
+        portfolio_value_data.append(portfolio_value)
+
+        # Total value
+        total_value = float(trade.balance_after) + portfolio_value
+        total_value_data.append(total_value)
+
+        # Profit/Loss
+        profit_loss = total_value - float(trader.initial_balance)
+        profit_loss_data.append(profit_loss)
+
+        # Cumulative trades
+        cumulative_trades_data.append(idx + 1)
+
+    return jsonify({
+        'labels': labels,
+        'balance': balance_data,
+        'portfolio_value': portfolio_value_data,
+        'total_value': total_value_data,
+        'profit_loss': profit_loss_data,
+        'cumulative_trades': cumulative_trades_data
+    })
+
+
 @app.route('/api/trades', methods=['GET'])
 def all_trades():
     """Get all trades across all traders"""
