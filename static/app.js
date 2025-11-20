@@ -136,6 +136,7 @@ function hideCreateTraderForm() {
     document.getElementById('traderName').value = '';
     document.getElementById('initialBalance').value = '10000';
     document.getElementById('riskTolerance').value = 'medium';
+    document.getElementById('tradingTimezone').value = 'America/New_York';
     document.getElementById('tradingEthos').value = '';
 }
 
@@ -143,6 +144,7 @@ async function createTrader() {
     const name = document.getElementById('traderName').value.trim();
     const initialBalance = parseFloat(document.getElementById('initialBalance').value);
     const riskTolerance = document.getElementById('riskTolerance').value;
+    const tradingTimezone = document.getElementById('tradingTimezone').value;
     const tradingEthos = document.getElementById('tradingEthos').value.trim();
 
     if (!name) {
@@ -165,6 +167,7 @@ async function createTrader() {
                 name,
                 initial_balance: initialBalance,
                 risk_tolerance: riskTolerance,
+                trading_timezone: tradingTimezone,
                 trading_ethos: tradingEthos || null
             })
         });
@@ -257,6 +260,10 @@ function displayTraders(traders) {
                     <div class="stat-label">Risk Tolerance</div>
                     <div class="stat-value">${trader.risk_tolerance.charAt(0).toUpperCase() + trader.risk_tolerance.slice(1)}</div>
                 </div>
+                <div class="stat">
+                    <div class="stat-label">Trading Exchange</div>
+                    <div class="stat-value">${trader.trading_timezone ? (trader.trading_timezone.includes('New_York') ? '🇺🇸 NYSE' : trader.trading_timezone.includes('London') ? '🇬🇧 LSE' : trader.trading_timezone.includes('Tokyo') ? '🇯🇵 TSE' : trader.trading_timezone) : '🇺🇸 NYSE'}</div>
+                </div>
             </div>
             ${ethosHtml}
         `;
@@ -274,6 +281,7 @@ async function editTrader(traderId) {
         document.getElementById('editTraderName').value = trader.name;
         document.getElementById('editRiskTolerance').value = trader.risk_tolerance;
         document.getElementById('editStatus').value = trader.status;
+        document.getElementById('editTradingTimezone').value = trader.trading_timezone || 'America/New_York';
         document.getElementById('editTradingEthos').value = trader.trading_ethos || '';
 
         document.getElementById('edit-trader-modal').style.display = 'block';
@@ -287,6 +295,7 @@ async function updateTrader() {
     const name = document.getElementById('editTraderName').value.trim();
     const riskTolerance = document.getElementById('editRiskTolerance').value;
     const status = document.getElementById('editStatus').value;
+    const tradingTimezone = document.getElementById('editTradingTimezone').value;
     const tradingEthos = document.getElementById('editTradingEthos').value.trim();
 
     if (!name) {
@@ -304,6 +313,7 @@ async function updateTrader() {
                 name,
                 risk_tolerance: riskTolerance,
                 status,
+                trading_timezone: tradingTimezone,
                 trading_ethos: tradingEthos || null
             })
         });

@@ -271,6 +271,7 @@ def traders():
             strategy_name=data.get('strategy_name', 'default'),
             risk_tolerance=data.get('risk_tolerance', 'medium'),
             trading_ethos=data.get('trading_ethos'),
+            trading_timezone=data.get('trading_timezone', 'America/New_York'),
             status=TraderStatus.ACTIVE
         )
 
@@ -303,6 +304,8 @@ def trader_detail(trader_id):
             trader.risk_tolerance = data['risk_tolerance']
         if 'trading_ethos' in data:
             trader.trading_ethos = data['trading_ethos']
+        if 'trading_timezone' in data:
+            trader.trading_timezone = data['trading_timezone']
 
         db.session.commit()
         logger.info(f"Updated trader: {trader.name}")

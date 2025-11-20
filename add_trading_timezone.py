@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 """
-Database migration script for Vibe Stock Market Predictor
-
-This script handles adding new columns to existing tables without
-dropping and recreating them.
+Migration script to add trading_timezone column to traders table
 
 Usage:
-    python migrate_db.py
+    python add_trading_timezone.py
 """
 
 import os
@@ -17,9 +14,9 @@ from sqlalchemy import text
 # Load environment variables
 load_dotenv()
 
-def migrate_database():
-    """Run database migrations to add missing columns"""
-    print("🔄 Running database migrations...")
+def add_trading_timezone_column():
+    """Add trading_timezone column to traders table"""
+    print("🔄 Adding trading_timezone column to traders table...")
 
     # Import app and database
     try:
@@ -38,24 +35,6 @@ def migrate_database():
 
     try:
         with app.app_context():
-            # Check if trading_ethos column exists
-            result = db.session.execute(text("""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name='traders' AND column_name='trading_ethos'
-            """))
-
-            if result.fetchone() is None:
-                print("➕ Adding trading_ethos column to traders table...")
-                db.session.execute(text("""
-                    ALTER TABLE traders
-                    ADD COLUMN trading_ethos TEXT
-                """))
-                db.session.commit()
-                print("✅ Added trading_ethos column successfully!")
-            else:
-                print("✓ trading_ethos column already exists")
-
             # Check if trading_timezone column exists
             result = db.session.execute(text("""
                 SELECT column_name
@@ -64,7 +43,7 @@ def migrate_database():
             """))
 
             if result.fetchone() is None:
-                print("➕ Adding trading_timezone column to traders table...")
+                print("➕ Adding trading_timezone column...")
                 db.session.execute(text("""
                     ALTER TABLE traders
                     ADD COLUMN trading_timezone VARCHAR(50) DEFAULT 'America/New_York' NOT NULL
@@ -74,7 +53,7 @@ def migrate_database():
             else:
                 print("✓ trading_timezone column already exists")
 
-            print("\n🎉 Database migration complete!")
+            print("\n🎉 Migration complete!")
 
     except Exception as e:
         print(f"❌ Error during migration: {e}")
@@ -83,4 +62,4 @@ def migrate_database():
         sys.exit(1)
 
 if __name__ == '__main__':
-    migrate_database()
+    add_trading_timezone_column()

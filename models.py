@@ -35,6 +35,7 @@ class Trader(db.Model):
     strategy_name = db.Column(db.String(50), nullable=False, default='default')
     risk_tolerance = db.Column(db.String(20), nullable=False, default='medium')  # low, medium, high
     trading_ethos = db.Column(db.Text, nullable=True)  # Free-form text for trading philosophy (bullish, bearish, etc.)
+    trading_timezone = db.Column(db.String(50), nullable=False, default='America/New_York')  # Trading timezone (NYSE, LSE, TSE, etc.)
 
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -58,6 +59,7 @@ class Trader(db.Model):
             'strategy_name': self.strategy_name,
             'risk_tolerance': self.risk_tolerance,
             'trading_ethos': self.trading_ethos,
+            'trading_timezone': self.trading_timezone,
             'created_at': self.created_at.isoformat(),
             'last_trade_at': self.last_trade_at.isoformat() if self.last_trade_at else None,
             'total_trades': self.trades.count(),
