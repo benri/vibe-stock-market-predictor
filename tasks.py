@@ -4,6 +4,7 @@ from celery_app import celery_app
 from alpha_vantage.timeseries import TimeSeries
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from decimal import Decimal
 import pandas as pd
 
 # Load environment variables
@@ -210,7 +211,7 @@ def execute_all_trader_decisions(time_of_day='morning'):
                             price = decision['current_price']
                             total_amount = quantity * price
 
-                            trader.current_balance -= total_amount
+                            trader.current_balance -= Decimal(str(total_amount))
 
                             # Update portfolio
                             portfolio_item = Portfolio.query.filter_by(
@@ -278,7 +279,7 @@ def execute_all_trader_decisions(time_of_day='morning'):
                             price = decision['current_price']
                             total_amount = quantity * price
 
-                            trader.current_balance += total_amount
+                            trader.current_balance += Decimal(str(total_amount))
 
                             # Update portfolio
                             portfolio_item.quantity -= quantity
@@ -434,7 +435,7 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
                             price = decision['current_price']
                             total_amount = quantity * price
 
-                            trader.current_balance -= total_amount
+                            trader.current_balance -= Decimal(str(total_amount))
 
                             # Update portfolio
                             portfolio_item = Portfolio.query.filter_by(
@@ -504,7 +505,7 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
                             price = decision['current_price']
                             total_amount = quantity * price
 
-                            trader.current_balance += total_amount
+                            trader.current_balance += Decimal(str(total_amount))
 
                             # Update portfolio
                             portfolio_item.quantity -= quantity
