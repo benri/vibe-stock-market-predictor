@@ -2,7 +2,6 @@
 
 **AI-powered stock market analysis and automated trading platform with intelligent machine traders**
 
-[![Live Demo](https://img.shields.io/badge/demo-live-success)](https://funk-vibes-9a551-7f8911888071.herokuapp.com/)
 [![GitHub](https://img.shields.io/badge/github-repo-blue)](https://github.com/benri/vibe-stock-market-predictor)
 
 ## 🎯 Project Vision & Goals

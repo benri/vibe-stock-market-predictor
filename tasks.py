@@ -328,6 +328,13 @@ def execute_all_trader_decisions(time_of_day='morning'):
 
         logger.info(f"Completed {time_of_day} trading session. Executed {len(results)} trades")
 
+        # Update portfolio prices after trading
+        try:
+            price_update_result = update_portfolio_prices()
+            logger.info(f"Updated {price_update_result['updated']} portfolio prices")
+        except Exception as e:
+            logger.error(f"Error updating portfolio prices: {str(e)}")
+
         return {
             'status': 'success',
             'time_of_day': time_of_day,
@@ -554,6 +561,13 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
 
         logger.info(f"Completed {time_of_day} trading session for {timezone}. Executed {len(results)} trades")
 
+        # Update portfolio prices after trading
+        try:
+            price_update_result = update_portfolio_prices()
+            logger.info(f"Updated {price_update_result['updated']} portfolio prices")
+        except Exception as e:
+            logger.error(f"Error updating portfolio prices: {str(e)}")
+
         return {
             'status': 'success',
             'timezone': timezone,
@@ -604,6 +618,58 @@ def portfolio_health_check():
             'status': 'success',
             'timestamp': datetime.utcnow().isoformat(),
             'traders': results
+        }
+
+
+def update_portfolio_prices():
+    """
+    Update current market prices for all portfolio holdings
+    This is called at the end of trading sessions to keep prices fresh
+    """
+    from app import app
+    from models import db, Portfolio
+
+    with app.app_context():
+        logger.info("Updating portfolio prices...")
+
+        # Get all unique tickers across all portfolios
+        portfolio_items = Portfolio.query.filter(Portfolio.quantity > 0).all()
+
+        if not portfolio_items:
+            logger.info("No portfolio items to update")
+            return {'status': 'success', 'updated': 0}
+
+        ts = TimeSeries(key=ALPHA_VANTAGE_API_KEY, output_format='json')
+        updated_count = 0
+        errors = []
+
+        for item in portfolio_items:
+            try:
+                # Fetch current price
+                data, _ = ts.get_quote_endpoint(symbol=item.ticker)
+                current_price = Decimal(str(data['05. price']))
+
+                # Update portfolio item
+                item.current_price = current_price
+                item.last_price_update = datetime.utcnow()
+
+                updated_count += 1
+                logger.info(f"Updated {item.ticker}: ${current_price}")
+
+            except Exception as e:
+                error_msg = f"Error updating {item.ticker}: {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+
+        # Commit all updates
+        db.session.commit()
+
+        logger.info(f"Updated prices for {updated_count} portfolio items")
+
+        return {
+            'status': 'success' if not errors else 'partial',
+            'updated': updated_count,
+            'errors': errors
         }
 
 

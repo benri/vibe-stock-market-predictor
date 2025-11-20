@@ -49,13 +49,37 @@ class Trader(db.Model):
         return f'<Trader {self.name} - ${self.current_balance}>'
 
     def to_dict(self):
-        """Convert trader to dictionary"""
+        """Convert trader to dictionary with market-value based P/L"""
+        portfolio_items = self.portfolio.all()
+
+        # Calculate portfolio value using cached current_price if available, else cost basis
+        portfolio_market_value = 0
+        portfolio_cost_basis = 0
+        for item in portfolio_items:
+            cost_basis = float(item.total_cost)
+            portfolio_cost_basis += cost_basis
+
+            if item.current_price and item.quantity > 0:
+                # Use cached market price
+                market_value = float(item.current_price) * item.quantity
+                portfolio_market_value += market_value
+            else:
+                # Fallback to cost basis if no current price
+                portfolio_market_value += cost_basis
+
+        total_value = float(self.current_balance) + portfolio_market_value
+        unrealized_pl = portfolio_market_value - portfolio_cost_basis
+
         return {
             'id': self.id,
             'name': self.name,
             'status': self.status.value,
             'initial_balance': float(self.initial_balance),
             'current_balance': float(self.current_balance),
+            'portfolio_value': portfolio_market_value,
+            'portfolio_cost_basis': portfolio_cost_basis,
+            'unrealized_pl': unrealized_pl,
+            'total_value': total_value,
             'strategy_name': self.strategy_name,
             'risk_tolerance': self.risk_tolerance,
             'trading_ethos': self.trading_ethos,
@@ -63,8 +87,8 @@ class Trader(db.Model):
             'created_at': self.created_at.isoformat(),
             'last_trade_at': self.last_trade_at.isoformat() if self.last_trade_at else None,
             'total_trades': self.trades.count(),
-            'profit_loss': float(self.current_balance - self.initial_balance),
-            'profit_loss_percentage': float((self.current_balance - self.initial_balance) / self.initial_balance * 100) if self.initial_balance > 0 else 0
+            'profit_loss': total_value - float(self.initial_balance),
+            'profit_loss_percentage': float((total_value - float(self.initial_balance)) / float(self.initial_balance) * 100) if self.initial_balance > 0 else 0
         }
 
 
@@ -141,6 +165,10 @@ class Portfolio(db.Model):
     average_price = db.Column(db.Numeric(10, 2), nullable=False)
     total_cost = db.Column(db.Numeric(12, 2), nullable=False)
 
+    # Market value (updated periodically)
+    current_price = db.Column(db.Numeric(10, 2), nullable=True)  # Latest market price
+    last_price_update = db.Column(db.DateTime, nullable=True)    # When price was last updated
+
     # Timestamps
     first_purchased_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     last_updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -171,9 +199,10 @@ class Portfolio(db.Model):
 
         if current_price:
             current_value = current_price * self.quantity
+            total_cost_float = float(self.total_cost)
             result['current_price'] = current_price
             result['current_value'] = float(current_value)
-            result['profit_loss'] = float(current_value - self.total_cost)
-            result['profit_loss_percentage'] = float((current_value - self.total_cost) / self.total_cost * 100) if self.total_cost > 0 else 0
+            result['profit_loss'] = float(current_value - total_cost_float)
+            result['profit_loss_percentage'] = float((current_value - total_cost_float) / total_cost_float * 100) if total_cost_float > 0 else 0
 
         return result

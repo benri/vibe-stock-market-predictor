@@ -74,6 +74,29 @@ def migrate_database():
             else:
                 print("✓ trading_timezone column already exists")
 
+            # Check if current_price column exists in portfolio table
+            result = db.session.execute(text("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name='portfolio' AND column_name='current_price'
+            """))
+
+            if result.fetchone() is None:
+                print("➕ Adding current_price and last_price_update columns to portfolio table...")
+                db.session.execute(text("""
+                    ALTER TABLE portfolio
+                    ADD COLUMN current_price NUMERIC(10, 2),
+                    ADD COLUMN last_price_update TIMESTAMP
+                """))
+                db.session.execute(text("""
+                    CREATE INDEX IF NOT EXISTS idx_portfolio_last_price_update
+                    ON portfolio(last_price_update)
+                """))
+                db.session.commit()
+                print("✅ Added portfolio price tracking columns successfully!")
+            else:
+                print("✓ current_price column already exists")
+
             print("\n🎉 Database migration complete!")
 
     except Exception as e:
