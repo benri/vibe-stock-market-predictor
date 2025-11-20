@@ -46,10 +46,6 @@ if not ALPHA_VANTAGE_API_KEY:
     logger.error("ALPHA_VANTAGE_API_KEY not found in environment variables!")
     raise ValueError("Please set ALPHA_VANTAGE_API_KEY in your .env file")
 
-# Create tables
-with app.app_context():
-    db.create_all()
-
 def calculate_technical_indicators(df):
     """Calculate technical indicators for trend analysis"""
     # Simple Moving Averages
