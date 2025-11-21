@@ -1,3 +1,8 @@
+"""
+Trading Tasks
+Automated trading tasks for executing trades and managing portfolios
+Uses service layer for all business logic
+"""
 import os
 import logging
 from celery_app import celery_app
@@ -5,7 +10,6 @@ from alpha_vantage.timeseries import TimeSeries
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from decimal import Decimal
-import pandas as pd
 
 # Load environment variables
 load_dotenv()
@@ -18,120 +22,58 @@ logger = logging.getLogger(__name__)
 ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 
 
-def calculate_technical_indicators(df):
-    """Calculate technical indicators for trend analysis"""
-    # Simple Moving Averages
-    df['SMA_20'] = df['Close'].rolling(window=20).mean()
-    df['SMA_50'] = df['Close'].rolling(window=50).mean()
+def fetch_and_analyze_ticker(ticker, ts, indicator_service, analysis_service, trader):
+    """
+    Fetch stock data, calculate indicators, and generate trading decision
 
-    # Exponential Moving Average
-    df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
-    df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
+    Args:
+        ticker: Stock ticker symbol
+        ts: Alpha Vantage TimeSeries instance
+        indicator_service: IndicatorService instance
+        analysis_service: TradingAnalysisService instance
+        trader: Trader model instance
 
-    # MACD (Moving Average Convergence Divergence)
-    df['MACD'] = df['EMA_12'] - df['EMA_26']
-    df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
+    Returns:
+        Trading decision dictionary or None if error/insufficient data
+    """
+    try:
+        logger.info(f"Analyzing {ticker}...")
 
-    # RSI (Relative Strength Index)
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    df['RSI'] = 100 - (100 / (1 + rs))
+        # Fetch stock data
+        df, _ = ts.get_daily(symbol=ticker, outputsize='full')
+        df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+        df = df.sort_index(ascending=True)
 
-    # Price momentum
-    df['Momentum'] = df['Close'].pct_change(periods=10) * 100
+        # Get last 6 months
+        six_months_ago = datetime.now() - timedelta(days=180)
+        df = df[df.index >= six_months_ago]
 
-    return df
+        if df.empty or not indicator_service.has_sufficient_data(df):
+            logger.warning(f"Insufficient data for {ticker}: {len(df) if not df.empty else 0} rows")
+            return None
 
+        logger.info(f"Fetched {len(df)} rows for {ticker}, calculating indicators...")
 
-def generate_trading_decision(df, ticker, trader):
-    """Generate buy/sell decision based on technical indicators"""
-    if len(df) < 50:
+        # Calculate indicators using service
+        df = indicator_service.calculate_all_indicators(df)
+
+        # Generate decision using service
+        decision = analysis_service.generate_trading_decision(df, ticker, trader)
+
+        if not decision:
+            logger.warning(f"No decision generated for {ticker}")
+            return None
+
+        logger.info(
+            f"{ticker}: action={decision['action']}, confidence={decision['confidence']}%, "
+            f"price=${decision['current_price']}, signals={decision['signals'][:2] if decision['signals'] else 'none'}"
+        )
+
+        return decision
+
+    except Exception as e:
+        logger.error(f"Error analyzing {ticker}: {str(e)}")
         return None
-
-    latest = df.iloc[-1]
-    prev = df.iloc[-2]
-
-    decision = {
-        'ticker': ticker,
-        'current_price': float(latest['Close']),
-        'sma_20': float(latest['SMA_20']) if pd.notna(latest['SMA_20']) else None,
-        'sma_50': float(latest['SMA_50']) if pd.notna(latest['SMA_50']) else None,
-        'rsi': float(latest['RSI']) if pd.notna(latest['RSI']) else None,
-        'macd': float(latest['MACD']) if pd.notna(latest['MACD']) else None,
-        'action': None,
-        'confidence': 50,
-        'signals': []
-    }
-
-    score = 0
-
-    # Trend signals
-    if pd.notna(latest['SMA_20']) and pd.notna(latest['SMA_50']):
-        if latest['Close'] > latest['SMA_20'] > latest['SMA_50']:
-            decision['signals'].append('Strong uptrend')
-            score += 20
-        elif latest['Close'] > latest['SMA_20']:
-            decision['signals'].append('Uptrend')
-            score += 10
-        elif latest['Close'] < latest['SMA_20'] < latest['SMA_50']:
-            decision['signals'].append('Strong downtrend')
-            score -= 20
-        elif latest['Close'] < latest['SMA_20']:
-            decision['signals'].append('Downtrend')
-            score -= 10
-
-    # RSI signals
-    if pd.notna(latest['RSI']):
-        if latest['RSI'] < 30:
-            decision['signals'].append(f'Oversold (RSI: {latest["RSI"]:.1f})')
-            score += 15
-        elif latest['RSI'] > 70:
-            decision['signals'].append(f'Overbought (RSI: {latest["RSI"]:.1f})')
-            score -= 15
-
-    # MACD signals
-    if pd.notna(latest['MACD']) and pd.notna(latest['Signal_Line']) and pd.notna(prev['MACD']) and pd.notna(prev['Signal_Line']):
-        if latest['MACD'] > latest['Signal_Line'] and prev['MACD'] <= prev['Signal_Line']:
-            decision['signals'].append('MACD bullish crossover')
-            score += 15
-        elif latest['MACD'] < latest['Signal_Line'] and prev['MACD'] >= prev['Signal_Line']:
-            decision['signals'].append('MACD bearish crossover')
-            score -= 15
-
-    # Momentum signals
-    if pd.notna(latest['Momentum']):
-        if latest['Momentum'] > 5:
-            decision['signals'].append(f'Strong positive momentum ({latest["Momentum"]:.1f}%)')
-            score += 10
-        elif latest['Momentum'] < -5:
-            decision['signals'].append(f'Strong negative momentum ({latest["Momentum"]:.1f}%)')
-            score -= 10
-
-    # Adjust score based on risk tolerance
-    if trader.risk_tolerance == 'low':
-        threshold_buy = 35
-        threshold_sell = -35
-    elif trader.risk_tolerance == 'high':
-        threshold_buy = 15
-        threshold_sell = -15
-    else:  # medium
-        threshold_buy = 18
-        threshold_sell = -18
-
-    # Determine action
-    if score >= threshold_buy:
-        decision['action'] = 'buy'
-        decision['confidence'] = min(70 + (score - threshold_buy), 95)
-    elif score <= threshold_sell:
-        decision['action'] = 'sell'
-        decision['confidence'] = min(70 + abs(score - threshold_sell), 95)
-    else:
-        decision['action'] = 'hold'
-        decision['confidence'] = 50 + abs(score)
-
-    return decision
 
 
 @celery_app.task(name='tasks.execute_all_trader_decisions')
@@ -143,7 +85,9 @@ def execute_all_trader_decisions(time_of_day='morning'):
         time_of_day: morning, midday, or afternoon
     """
     from app import app
-    from models import db, Trader, Trade, Portfolio, TraderStatus, TradeAction
+    from models import db, Trader, TraderStatus
+    from app.services import IndicatorService, TradingAnalysisService, TradingService
+    from app.config import TradingConfig
 
     with app.app_context():
         logger.info(f"Starting {time_of_day} trading session")
@@ -155,173 +99,46 @@ def execute_all_trader_decisions(time_of_day='morning'):
             logger.info("No active traders found")
             return {'status': 'success', 'message': 'No active traders'}
 
-        # Define watchlist of tickers to trade
-        watchlist = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META']
+        # Initialize services
+        indicator_service = IndicatorService()
+        analysis_service = TradingAnalysisService(indicator_service)
+        trading_service = TradingService()
+
+        # Get watchlist (default to New York if no timezone specified)
+        watchlist = TradingConfig.get_watchlist('America/New_York')
 
         ts = TimeSeries(key=ALPHA_VANTAGE_API_KEY, output_format='pandas')
-
         results = []
 
         for trader in traders:
             logger.info(f"Processing trader: {trader.name}")
 
-            # Get trader's current portfolio
-            portfolio = Portfolio.query.filter_by(trader_id=trader.id).all()
-            portfolio_tickers = {item.ticker for item in portfolio}
+            # Get trader's current portfolio tickers
+            portfolio_tickers = trading_service.get_trader_portfolio_tickers(trader.id)
 
-            # Analyze each ticker
+            # Analyze each ticker in watchlist
             for ticker in watchlist:
-                try:
-                    logger.info(f"Analyzing {ticker}...")
-                    # Fetch stock data
-                    df, _ = ts.get_daily(symbol=ticker, outputsize='full')
-                    df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-                    df = df.sort_index(ascending=True)
+                decision = fetch_and_analyze_ticker(
+                    ticker, ts, indicator_service, analysis_service, trader
+                )
 
-                    # Get last 6 months
-                    six_months_ago = datetime.now() - timedelta(days=180)
-                    df = df[df.index >= six_months_ago]
-
-                    if df.empty or len(df) < 50:
-                        logger.warning(f"Insufficient data for {ticker}: {len(df) if not df.empty else 0} rows")
-                        continue
-
-                    logger.info(f"Fetched {len(df)} rows for {ticker}, calculating indicators...")
-
-                    # Calculate indicators
-                    df = calculate_technical_indicators(df)
-
-                    # Generate decision
-                    decision = generate_trading_decision(df, ticker, trader)
-
-                    if not decision:
-                        logger.warning(f"No decision generated for {ticker}")
-                        continue
-
-                    logger.info(f"{ticker}: action={decision['action']}, confidence={decision['confidence']}%, price=${decision['current_price']}, signals={decision['signals'][:2] if len(decision['signals']) > 0 else 'none'}")
-
-                    # Execute trade based on decision
-                    if decision['action'] == 'buy':
-                        # Determine quantity based on account balance and risk tolerance
-                        max_investment = float(trader.current_balance) * (0.15 if trader.risk_tolerance == 'high' else 0.10 if trader.risk_tolerance == 'medium' else 0.05)
-                        quantity = int(max_investment / decision['current_price'])
-
-                        if quantity > 0 and float(trader.current_balance) >= (quantity * decision['current_price']):
-                            # Execute buy
-                            price = decision['current_price']
-                            total_amount = quantity * price
-
-                            trader.current_balance -= Decimal(str(total_amount))
-
-                            # Update portfolio
-                            portfolio_item = Portfolio.query.filter_by(
-                                trader_id=trader.id,
-                                ticker=ticker
-                            ).first()
-
-                            if portfolio_item:
-                                new_total_cost = portfolio_item.total_cost + total_amount
-                                new_quantity = portfolio_item.quantity + quantity
-                                portfolio_item.average_price = new_total_cost / new_quantity
-                                portfolio_item.total_cost = new_total_cost
-                                portfolio_item.quantity = new_quantity
-                            else:
-                                portfolio_item = Portfolio(
-                                    trader_id=trader.id,
-                                    ticker=ticker,
-                                    quantity=quantity,
-                                    average_price=price,
-                                    total_cost=total_amount
-                                )
-                                db.session.add(portfolio_item)
-
-                            # Create trade record
-                            trade = Trade(
-                                trader_id=trader.id,
-                                ticker=ticker,
-                                action=TradeAction.BUY,
-                                quantity=quantity,
-                                price=price,
-                                total_amount=total_amount,
-                                balance_after=trader.current_balance,
-                                rsi=decision['rsi'],
-                                macd=decision['macd'],
-                                sma_20=decision['sma_20'],
-                                sma_50=decision['sma_50'],
-                                recommendation='BUY',
-                                confidence=decision['confidence'],
-                                notes=f"Automated {time_of_day} trade: {', '.join(decision['signals'])}"
-                            )
-
-                            trader.last_trade_at = datetime.utcnow()
-                            db.session.add(trade)
-
-                            results.append({
-                                'trader': trader.name,
-                                'action': 'BUY',
-                                'ticker': ticker,
-                                'quantity': quantity,
-                                'price': price
-                            })
-
-                            logger.info(f"{trader.name} bought {quantity} shares of {ticker} at ${price}")
-
-                    elif decision['action'] == 'sell' and ticker in portfolio_tickers:
-                        # Find portfolio item
-                        portfolio_item = Portfolio.query.filter_by(
-                            trader_id=trader.id,
-                            ticker=ticker
-                        ).first()
-
-                        if portfolio_item and portfolio_item.quantity > 0:
-                            # Sell half of position or all if small
-                            quantity = portfolio_item.quantity // 2 if portfolio_item.quantity > 2 else portfolio_item.quantity
-                            price = decision['current_price']
-                            total_amount = quantity * price
-
-                            trader.current_balance += Decimal(str(total_amount))
-
-                            # Update portfolio
-                            portfolio_item.quantity -= quantity
-                            portfolio_item.total_cost -= (portfolio_item.average_price * quantity)
-
-                            if portfolio_item.quantity == 0:
-                                db.session.delete(portfolio_item)
-
-                            # Create trade record
-                            trade = Trade(
-                                trader_id=trader.id,
-                                ticker=ticker,
-                                action=TradeAction.SELL,
-                                quantity=quantity,
-                                price=price,
-                                total_amount=total_amount,
-                                balance_after=trader.current_balance,
-                                rsi=decision['rsi'],
-                                macd=decision['macd'],
-                                sma_20=decision['sma_20'],
-                                sma_50=decision['sma_50'],
-                                recommendation='SELL',
-                                confidence=decision['confidence'],
-                                notes=f"Automated {time_of_day} trade: {', '.join(decision['signals'])}"
-                            )
-
-                            trader.last_trade_at = datetime.utcnow()
-                            db.session.add(trade)
-
-                            results.append({
-                                'trader': trader.name,
-                                'action': 'SELL',
-                                'ticker': ticker,
-                                'quantity': quantity,
-                                'price': price
-                            })
-
-                            logger.info(f"{trader.name} sold {quantity} shares of {ticker} at ${price}")
-
-                except Exception as e:
-                    logger.error(f"Error processing {ticker} for {trader.name}: {str(e)}")
+                if not decision:
                     continue
+
+                # Execute trade based on decision using service
+                trade_result = None
+
+                if decision['action'] == 'buy':
+                    trade_result = trading_service.execute_buy_trade(
+                        trader, ticker, decision, time_of_day
+                    )
+                elif decision['action'] == 'sell' and ticker in portfolio_tickers:
+                    trade_result = trading_service.execute_sell_trade(
+                        trader, ticker, decision, time_of_day
+                    )
+
+                if trade_result:
+                    results.append(trade_result)
 
         # Commit all trades
         db.session.commit()
@@ -354,7 +171,9 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
         time_of_day: morning, midday, afternoon, or closing
     """
     from app import app
-    from models import db, Trader, Trade, Portfolio, TraderStatus, TradeAction
+    from models import db, Trader, TraderStatus
+    from app.services import IndicatorService, TradingAnalysisService, TradingService
+    from app.config import TradingConfig
 
     with app.app_context():
         logger.info(f"Starting {time_of_day} trading session for {timezone} timezone")
@@ -376,184 +195,46 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
 
         logger.info(f"Found {len(traders)} active traders in {timezone}")
 
-        # Define watchlist based on timezone
-        watchlists = {
-            'America/New_York': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META'],  # US stocks
-            'Europe/London': ['BARC.L', 'HSBA.L', 'BP.L', 'SHEL.L', 'VOD.L', 'GSK.L', 'AZN.L'],  # UK stocks
-            'Asia/Tokyo': ['7203.T', '6758.T', '9984.T', '8306.T', '9432.T', '6861.T', '6501.T'],  # Japanese stocks
-        }
+        # Initialize services
+        indicator_service = IndicatorService()
+        analysis_service = TradingAnalysisService(indicator_service)
+        trading_service = TradingService()
 
-        watchlist = watchlists.get(timezone, watchlists['America/New_York'])
+        # Get watchlist for timezone using config
+        watchlist = TradingConfig.get_watchlist(timezone)
 
         ts = TimeSeries(key=ALPHA_VANTAGE_API_KEY, output_format='pandas')
-
         results = []
 
         for trader in traders:
             logger.info(f"Processing trader: {trader.name} (Timezone: {timezone})")
 
-            # Get trader's current portfolio
-            portfolio = Portfolio.query.filter_by(trader_id=trader.id).all()
-            portfolio_tickers = {item.ticker for item in portfolio}
+            # Get trader's current portfolio tickers
+            portfolio_tickers = trading_service.get_trader_portfolio_tickers(trader.id)
 
-            # Analyze each ticker
+            # Analyze each ticker in watchlist
             for ticker in watchlist:
-                try:
-                    logger.info(f"Analyzing {ticker}...")
-                    # Fetch stock data
-                    df, _ = ts.get_daily(symbol=ticker, outputsize='full')
-                    df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-                    df = df.sort_index(ascending=True)
+                decision = fetch_and_analyze_ticker(
+                    ticker, ts, indicator_service, analysis_service, trader
+                )
 
-                    # Get last 6 months
-                    six_months_ago = datetime.now() - timedelta(days=180)
-                    df = df[df.index >= six_months_ago]
-
-                    if df.empty or len(df) < 50:
-                        logger.warning(f"Insufficient data for {ticker}: {len(df) if not df.empty else 0} rows")
-                        continue
-
-                    logger.info(f"Fetched {len(df)} rows for {ticker}, calculating indicators...")
-
-                    # Calculate indicators
-                    df = calculate_technical_indicators(df)
-
-                    # Generate decision
-                    decision = generate_trading_decision(df, ticker, trader)
-
-                    if not decision:
-                        logger.warning(f"No decision generated for {ticker}")
-                        continue
-
-                    logger.info(f"{ticker}: action={decision['action']}, confidence={decision['confidence']}%, price=${decision['current_price']}, signals={decision['signals'][:2] if len(decision['signals']) > 0 else 'none'}")
-
-                    # Execute trade based on decision
-                    if decision['action'] == 'buy':
-                        # Determine quantity based on account balance and risk tolerance
-                        max_investment = float(trader.current_balance) * (
-                            0.15 if trader.risk_tolerance == 'high' else
-                            0.10 if trader.risk_tolerance == 'medium' else 0.05
-                        )
-                        quantity = int(max_investment / decision['current_price'])
-
-                        if quantity > 0 and float(trader.current_balance) >= (quantity * decision['current_price']):
-                            # Execute buy
-                            price = decision['current_price']
-                            total_amount = quantity * price
-
-                            trader.current_balance -= Decimal(str(total_amount))
-
-                            # Update portfolio
-                            portfolio_item = Portfolio.query.filter_by(
-                                trader_id=trader.id,
-                                ticker=ticker
-                            ).first()
-
-                            if portfolio_item:
-                                new_total_cost = portfolio_item.total_cost + total_amount
-                                new_quantity = portfolio_item.quantity + quantity
-                                portfolio_item.average_price = new_total_cost / new_quantity
-                                portfolio_item.total_cost = new_total_cost
-                                portfolio_item.quantity = new_quantity
-                            else:
-                                portfolio_item = Portfolio(
-                                    trader_id=trader.id,
-                                    ticker=ticker,
-                                    quantity=quantity,
-                                    average_price=price,
-                                    total_cost=total_amount
-                                )
-                                db.session.add(portfolio_item)
-
-                            # Create trade record
-                            trade = Trade(
-                                trader_id=trader.id,
-                                ticker=ticker,
-                                action=TradeAction.BUY,
-                                quantity=quantity,
-                                price=price,
-                                total_amount=total_amount,
-                                balance_after=trader.current_balance,
-                                rsi=decision['rsi'],
-                                macd=decision['macd'],
-                                sma_20=decision['sma_20'],
-                                sma_50=decision['sma_50'],
-                                recommendation='BUY',
-                                confidence=decision['confidence'],
-                                notes=f"Automated {timezone} {time_of_day} trade: {', '.join(decision['signals'])}"
-                            )
-
-                            trader.last_trade_at = datetime.utcnow()
-                            db.session.add(trade)
-
-                            results.append({
-                                'trader': trader.name,
-                                'action': 'BUY',
-                                'ticker': ticker,
-                                'quantity': quantity,
-                                'price': price
-                            })
-
-                            logger.info(f"{trader.name} bought {quantity} shares of {ticker} at ${price}")
-
-                    elif decision['action'] == 'sell' and ticker in portfolio_tickers:
-                        # Find portfolio item
-                        portfolio_item = Portfolio.query.filter_by(
-                            trader_id=trader.id,
-                            ticker=ticker
-                        ).first()
-
-                        if portfolio_item and portfolio_item.quantity > 0:
-                            # Sell portion based on risk tolerance
-                            sell_portion = 0.5 if trader.risk_tolerance == 'low' else 0.75
-                            quantity = max(1, int(portfolio_item.quantity * sell_portion))
-
-                            price = decision['current_price']
-                            total_amount = quantity * price
-
-                            trader.current_balance += Decimal(str(total_amount))
-
-                            # Update portfolio
-                            portfolio_item.quantity -= quantity
-                            portfolio_item.total_cost -= (portfolio_item.average_price * quantity)
-
-                            if portfolio_item.quantity == 0:
-                                db.session.delete(portfolio_item)
-
-                            # Create trade record
-                            trade = Trade(
-                                trader_id=trader.id,
-                                ticker=ticker,
-                                action=TradeAction.SELL,
-                                quantity=quantity,
-                                price=price,
-                                total_amount=total_amount,
-                                balance_after=trader.current_balance,
-                                rsi=decision['rsi'],
-                                macd=decision['macd'],
-                                sma_20=decision['sma_20'],
-                                sma_50=decision['sma_50'],
-                                recommendation='SELL',
-                                confidence=decision['confidence'],
-                                notes=f"Automated {timezone} {time_of_day} trade: {', '.join(decision['signals'])}"
-                            )
-
-                            trader.last_trade_at = datetime.utcnow()
-                            db.session.add(trade)
-
-                            results.append({
-                                'trader': trader.name,
-                                'action': 'SELL',
-                                'ticker': ticker,
-                                'quantity': quantity,
-                                'price': price
-                            })
-
-                            logger.info(f"{trader.name} sold {quantity} shares of {ticker} at ${price}")
-
-                except Exception as e:
-                    logger.error(f"Error processing {ticker} for {trader.name}: {str(e)}")
+                if not decision:
                     continue
+
+                # Execute trade based on decision using service
+                trade_result = None
+
+                if decision['action'] == 'buy':
+                    trade_result = trading_service.execute_buy_trade(
+                        trader, ticker, decision, f"{timezone} {time_of_day}"
+                    )
+                elif decision['action'] == 'sell' and ticker in portfolio_tickers:
+                    trade_result = trading_service.execute_sell_trade(
+                        trader, ticker, decision, f"{timezone} {time_of_day}"
+                    )
+
+                if trade_result:
+                    results.append(trade_result)
 
         # Commit all trades
         db.session.commit()
@@ -589,7 +270,6 @@ def portfolio_health_check():
         logger.info("Starting portfolio health check")
 
         traders = Trader.query.all()
-
         results = []
 
         for trader in traders:
@@ -690,6 +370,7 @@ def execute_single_trade(trader_id, ticker):
     """
     from app import app
     from models import db, Trader
+    from app.services import IndicatorService, TradingAnalysisService, TradingService
 
     with app.app_context():
         trader = Trader.query.get(trader_id)
@@ -697,7 +378,32 @@ def execute_single_trade(trader_id, ticker):
         if not trader:
             return {'status': 'error', 'message': 'Trader not found'}
 
-        # This would contain the same logic as above but for a single ticker
-        # Omitted for brevity but would follow the same pattern
+        # Initialize services
+        indicator_service = IndicatorService()
+        analysis_service = TradingAnalysisService(indicator_service)
+        trading_service = TradingService()
 
-        return {'status': 'success', 'message': f'Trade executed for {ticker}'}
+        ts = TimeSeries(key=ALPHA_VANTAGE_API_KEY, output_format='pandas')
+
+        # Analyze ticker
+        decision = fetch_and_analyze_ticker(
+            ticker, ts, indicator_service, analysis_service, trader
+        )
+
+        if not decision:
+            return {'status': 'error', 'message': f'Could not analyze {ticker}'}
+
+        # Execute trade
+        trade_result = None
+        portfolio_tickers = trading_service.get_trader_portfolio_tickers(trader.id)
+
+        if decision['action'] == 'buy':
+            trade_result = trading_service.execute_buy_trade(trader, ticker, decision, 'manual')
+        elif decision['action'] == 'sell' and ticker in portfolio_tickers:
+            trade_result = trading_service.execute_sell_trade(trader, ticker, decision, 'manual')
+
+        if trade_result:
+            db.session.commit()
+            return {'status': 'success', 'trade': trade_result}
+        else:
+            return {'status': 'success', 'message': f'No trade executed (action: {decision["action"]})'}
