@@ -86,8 +86,8 @@ def execute_all_trader_decisions(time_of_day='morning'):
     """
     from app import app
     from models import db, Trader, TraderStatus
-    from app.services import IndicatorService, TradingAnalysisService, TradingService
-    from app.config import TradingConfig
+    from src.services import IndicatorService, TradingAnalysisService, TradingService
+    from src.config import TradingConfig
 
     with app.app_context():
         logger.info(f"Starting {time_of_day} trading session")
@@ -172,8 +172,8 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
     """
     from app import app
     from models import db, Trader, TraderStatus
-    from app.services import IndicatorService, TradingAnalysisService, TradingService
-    from app.config import TradingConfig
+    from src.services import IndicatorService, TradingAnalysisService, TradingService
+    from src.config import TradingConfig
 
     with app.app_context():
         logger.info(f"Starting {time_of_day} trading session for {timezone} timezone")

@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Dict, Optional, List, Any
 from models import db, Trade, Portfolio, TradeAction
-from app.config import TradingConfig
+from src.config import TradingConfig
 
 logger = logging.getLogger(__name__)
 

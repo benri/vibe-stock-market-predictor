@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 from flask_migrate import Migrate
 from models import db, Trader, Trade, Portfolio, TraderStatus, TradeAction, TickerPrice
 from functools import wraps
-from app.services import IndicatorService, TradingAnalysisService, TradingService
-from app.config import TradingConfig
+from src.services import IndicatorService, TradingAnalysisService, TradingService
+from src.config import TradingConfig
 
 # Load environment variables
 load_dotenv()
