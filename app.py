@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from flask_migrate import Migrate
 from models import db, Trader, Trade, Portfolio, TraderStatus, TradeAction, TickerPrice
 from functools import wraps
+from app.services import IndicatorService, TradingAnalysisService, TradingService
+from app.config import TradingConfig
 
 # Load environment variables
 load_dotenv()
@@ -51,117 +53,10 @@ if not ALPHA_VANTAGE_API_KEY:
     logger.error("ALPHA_VANTAGE_API_KEY not found in environment variables!")
     raise ValueError("Please set ALPHA_VANTAGE_API_KEY in your .env file")
 
-def calculate_technical_indicators(df):
-    """Calculate technical indicators for trend analysis"""
-    # Simple Moving Averages
-    df['SMA_20'] = df['Close'].rolling(window=20).mean()
-    df['SMA_50'] = df['Close'].rolling(window=50).mean()
-
-    # Exponential Moving Average
-    df['EMA_12'] = df['Close'].ewm(span=12, adjust=False).mean()
-    df['EMA_26'] = df['Close'].ewm(span=26, adjust=False).mean()
-
-    # MACD (Moving Average Convergence Divergence)
-    df['MACD'] = df['EMA_12'] - df['EMA_26']
-    df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
-
-    # RSI (Relative Strength Index)
-    delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
-    df['RSI'] = 100 - (100 / (1 + rs))
-
-    # Price momentum
-    df['Momentum'] = df['Close'].pct_change(periods=10) * 100
-
-    return df
-
-def generate_signals(df, ticker):
-    """Generate buy/sell signals based on technical indicators"""
-    if len(df) < 50:
-        return None
-
-    latest = df.iloc[-1]
-    prev = df.iloc[-2]
-
-    signals = {
-        'ticker': ticker,
-        'current_price': round(latest['Close'], 2),
-        'sma_20': round(latest['SMA_20'], 2) if pd.notna(latest['SMA_20']) else None,
-        'sma_50': round(latest['SMA_50'], 2) if pd.notna(latest['SMA_50']) else None,
-        'rsi': round(latest['RSI'], 2) if pd.notna(latest['RSI']) else None,
-        'macd': round(latest['MACD'], 2) if pd.notna(latest['MACD']) else None,
-        'momentum': round(latest['Momentum'], 2) if pd.notna(latest['Momentum']) else None,
-        'recommendation': 'HOLD',
-        'confidence': 50,
-        'signals': []
-    }
-
-    score = 0
-
-    # Trend signals
-    if pd.notna(latest['SMA_20']) and pd.notna(latest['SMA_50']):
-        if latest['Close'] > latest['SMA_20'] > latest['SMA_50']:
-            signals['signals'].append('✅ Strong uptrend: Price above both moving averages')
-            score += 20
-        elif latest['Close'] > latest['SMA_20']:
-            signals['signals'].append('↗️ Uptrend: Price above 20-day MA')
-            score += 10
-        elif latest['Close'] < latest['SMA_20'] < latest['SMA_50']:
-            signals['signals'].append('❌ Strong downtrend: Price below both moving averages')
-            score -= 20
-        elif latest['Close'] < latest['SMA_20']:
-            signals['signals'].append('↘️ Downtrend: Price below 20-day MA')
-            score -= 10
-
-    # RSI signals
-    if pd.notna(latest['RSI']):
-        if latest['RSI'] < 30:
-            signals['signals'].append(f'🔥 Oversold (RSI: {latest["RSI"]:.1f}) - potential buy opportunity')
-            score += 15
-        elif latest['RSI'] > 70:
-            signals['signals'].append(f'⚠️ Overbought (RSI: {latest["RSI"]:.1f}) - potential sell signal')
-            score -= 15
-        elif 40 <= latest['RSI'] <= 60:
-            signals['signals'].append(f'⚖️ Neutral momentum (RSI: {latest["RSI"]:.1f})')
-
-    # MACD signals
-    if pd.notna(latest['MACD']) and pd.notna(latest['Signal_Line']) and pd.notna(prev['MACD']) and pd.notna(prev['Signal_Line']):
-        if latest['MACD'] > latest['Signal_Line'] and prev['MACD'] <= prev['Signal_Line']:
-            signals['signals'].append('📈 MACD bullish crossover - buy signal')
-            score += 15
-        elif latest['MACD'] < latest['Signal_Line'] and prev['MACD'] >= prev['Signal_Line']:
-            signals['signals'].append('📉 MACD bearish crossover - sell signal')
-            score -= 15
-
-    # Momentum signals
-    if pd.notna(latest['Momentum']):
-        if latest['Momentum'] > 5:
-            signals['signals'].append(f'🚀 Strong positive momentum ({latest["Momentum"]:.1f}%)')
-            score += 10
-        elif latest['Momentum'] < -5:
-            signals['signals'].append(f'⬇️ Strong negative momentum ({latest["Momentum"]:.1f}%)')
-            score -= 10
-
-    # Determine recommendation
-    if score >= 30:
-        signals['recommendation'] = 'STRONG BUY'
-        signals['confidence'] = min(80 + (score - 30), 95)
-    elif score >= 15:
-        signals['recommendation'] = 'BUY'
-        signals['confidence'] = 65 + (score - 15)
-    elif score <= -30:
-        signals['recommendation'] = 'STRONG SELL'
-        signals['confidence'] = min(80 + abs(score + 30), 95)
-    elif score <= -15:
-        signals['recommendation'] = 'SELL'
-        signals['confidence'] = 65 + abs(score + 15)
-    else:
-        signals['recommendation'] = 'HOLD'
-        signals['confidence'] = 50 + abs(score)
-
-    return signals
+# Initialize services
+indicator_service = IndicatorService()
+analysis_service = TradingAnalysisService(indicator_service)
+trading_service = TradingService()
 
 def require_api_key(f):
     """Decorator to require API key authentication for scheduled task endpoints"""
@@ -220,11 +115,11 @@ def analyze():
                     })
                     continue
 
-                # Calculate indicators
-                df = calculate_technical_indicators(df)
+                # Calculate indicators using service
+                df = indicator_service.calculate_all_indicators(df)
 
-                # Generate signals
-                signals = generate_signals(df, ticker.upper())
+                # Generate signals using service
+                signals = analysis_service.generate_display_signals(df, ticker.upper())
 
                 if signals:
                     # Alpha Vantage doesn't provide company names in daily endpoint
