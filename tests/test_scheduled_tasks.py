@@ -212,7 +212,7 @@ def test_portfolio_health_check_error_handling(client, app):
 
 def test_all_timezones_supported(client, app):
     """Test that all supported timezones work"""
-    timezones = ['America/New_York', 'Europe/London', 'Asia/Tokyo', 'America/Los_Angeles']
+    timezones = ['America/New_York', 'Europe/London', 'Asia/Tokyo']
 
     with patch('tasks.execute_trader_decisions_by_timezone') as mock_task:
         mock_task.return_value = {

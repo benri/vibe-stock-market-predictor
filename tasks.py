@@ -379,7 +379,6 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
         # Define watchlist based on timezone
         watchlists = {
             'America/New_York': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META'],  # US stocks
-            'America/Los_Angeles': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META'],  # US stocks (PST)
             'Europe/London': ['BARC.L', 'HSBA.L', 'BP.L', 'SHEL.L', 'VOD.L', 'GSK.L', 'AZN.L'],  # UK stocks
             'Asia/Tokyo': ['7203.T', '6758.T', '9984.T', '8306.T', '9432.T', '6861.T', '6501.T'],  # Japanese stocks
         }
