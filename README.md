@@ -39,7 +39,7 @@ Create and manage virtual traders with unique personalities:
 
 - **Backend**: Flask (Python 3.11)
 - **Database**: PostgreSQL with SQLAlchemy ORM
-- **Background Jobs**: Celery + Redis for automated trading
+- **Scheduling**: GitHub Actions for automated trading
 - **Market Data**: Alpha Vantage API
 - **Frontend**: Vanilla JavaScript + Modern CSS
 - **Deployment**: Heroku (Cloud Native Buildpacks)
@@ -50,7 +50,6 @@ Create and manage virtual traders with unique personalities:
 
 - Python 3.11+
 - PostgreSQL
-- Redis
 - Alpha Vantage API key ([Get one free](https://www.alphavantage.co/support/#api-key))
 
 ### Local Setup
@@ -75,7 +74,6 @@ Create and manage virtual traders with unique personalities:
    ```
    ALPHA_VANTAGE_API_KEY=your_api_key_here
    DATABASE_URL=postgresql://localhost/vibe-stock-market-predictor-development
-   REDIS_URL=redis://localhost:6379/0
    ```
 
 4. **Create and initialize the database**
@@ -95,20 +93,11 @@ Create and manage virtual traders with unique personalities:
 
 5. **Run the application**
 
-   Terminal 1 - Web Server:
    ```bash
    python app.py
    ```
 
-   Terminal 2 - Celery Worker:
-   ```bash
-   celery -A celery_app worker --loglevel=info
-   ```
-
-   Terminal 3 - Celery Beat (Scheduler):
-   ```bash
-   celery -A celery_app beat --loglevel=info
-   ```
+   Note: Automated trading is handled by GitHub Actions. See SCHEDULER_SETUP.md for setup instructions.
 
 6. **Open your browser**
    ```
@@ -185,12 +174,7 @@ Traders analyze a watchlist of popular stocks: AAPL, MSFT, GOOGL, AMZN, TSLA, NV
    heroku addons:create heroku-postgresql:mini
    ```
 
-3. **Add Redis addon**
-   ```bash
-   heroku addons:create heroku-redis:mini
-   ```
-
-4. **Set environment variables**
+3. **Set environment variables**
    ```bash
    heroku config:set ALPHA_VANTAGE_API_KEY=your_api_key
    ```
@@ -202,8 +186,10 @@ Traders analyze a watchlist of popular stocks: AAPL, MSFT, GOOGL, AMZN, TSLA, NV
 
 6. **Scale dynos**
    ```bash
-   heroku ps:scale web=1 worker=1 beat=1
+   heroku ps:scale web=1
    ```
+
+7. **Set up GitHub Actions** - See SCHEDULER_SETUP.md for automated trading setup
 
 ## 🧪 API Endpoints
 
@@ -225,8 +211,7 @@ Traders analyze a watchlist of popular stocks: AAPL, MSFT, GOOGL, AMZN, TSLA, NV
 vibe-stock-market-predictor/
 ├── app.py                 # Flask application and REST API
 ├── models.py              # Database models (Trader, Trade, Portfolio)
-├── celery_app.py          # Celery configuration and scheduling
-├── tasks.py               # Automated trading tasks
+├── tasks.py               # Trading task functions
 ├── requirements.txt       # Python dependencies
 ├── Procfile               # Heroku process types
 ├── runtime.txt            # Python version
@@ -266,7 +251,7 @@ vibe-stock-market-predictor/
 |----------|-------------|----------|
 | `ALPHA_VANTAGE_API_KEY` | API key for stock data | Yes |
 | `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `REDIS_URL` | Redis connection string | Yes (for workers) |
+| `SCHEDULER_API_KEY` | API key for GitHub Actions | Yes (for automation) |
 | `PORT` | Server port (default: 5000) | No |
 
 ## 🐛 Troubleshooting
@@ -279,14 +264,13 @@ Alpha Vantage free tier allows:
 
 If you hit rate limits, consider upgrading your API plan or implementing caching.
 
-### Worker Not Running
+### Automated Trading Not Running
 
-Check that all three processes are running:
-```bash
-heroku ps
-```
-
-You should see: `web.1`, `worker.1`, `beat.1`
+Check GitHub Actions:
+1. Go to your repository's Actions tab
+2. Verify workflows are enabled
+3. Check for any failed workflow runs
+4. Ensure SCHEDULER_API_KEY is set in GitHub Secrets
 
 ### Database Connection Issues
 
@@ -313,7 +297,7 @@ This project is open source and available under the [MIT License](LICENSE).
 
 - [Alpha Vantage](https://www.alphavantage.co/) for free stock market data API
 - [Flask](https://flask.palletsprojects.com/) for the web framework
-- [Celery](https://docs.celeryq.dev/) for distributed task processing
+- [GitHub Actions](https://docs.github.com/en/actions) for automated scheduling
 - Technical analysis concepts from traditional trading strategies
 
 ## 📞 Support
