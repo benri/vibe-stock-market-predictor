@@ -18,7 +18,8 @@ def app():
     """Create and configure a test Flask app"""
     # Configure test settings
     flask_app.config['TESTING'] = True
-    flask_app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://localhost/vibe-stock-market-predictor-test'
+    # Use SQLite in-memory database for tests (no PostgreSQL required)
+    flask_app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     flask_app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     # Create test database tables
