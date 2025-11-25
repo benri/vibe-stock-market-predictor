@@ -32,8 +32,7 @@ Create an intelligent, autonomous stock trading platform that combines technical
 ### Tech Stack
 - **Backend:** Python 3.12, Flask, SQLAlchemy
 - **Database:** PostgreSQL (Heroku Postgres)
-- **Queue/Cache:** Redis (Heroku Redis)
-- **Task Queue:** Celery with Celery Beat for scheduled jobs
+- **Scheduling:** GitHub Actions for automated trading tasks
 - **Market Data:** Alpha Vantage API (free tier, 25 requests/day)
 - **Deployment:** Heroku with Cloud Native Buildpacks
 - **Frontend:** Vanilla JavaScript, CSS3 with modern gradients
@@ -61,11 +60,11 @@ Create an intelligent, autonomous stock trading platform that combines technical
                 ┌───────────┴──────────┐
                 ↓                      ↓
 ┌──────────────────────┐  ┌─────────────────────────┐
-│  POSTGRESQL DB       │  │  CELERY WORKERS         │
-│  • Traders           │  │  • Morning trades (9:45) │
-│  • Trades            │  │  • Midday trades (12:30) │
-│  • Portfolio         │  │  • Evening trades (3:00) │
-└──────────────────────┘  │  • Health check (4:30)  │
+│  POSTGRESQL DB       │  │  GITHUB ACTIONS         │
+│  • Traders           │  │  • Morning trades       │
+│  • Trades            │  │  • Midday trades        │
+│  • Portfolio         │  │  • Afternoon trades     │
+└──────────────────────┘  │  • Health check         │
                           └─────────────────────────┘
                                       │
                                       ↓
@@ -120,8 +119,7 @@ Create an intelligent, autonomous stock trading platform that combines technical
 vibe-stock-market-predictor/
 ├── app.py                  # Flask application & REST API
 ├── models.py              # SQLAlchemy database models
-├── celery_app.py          # Celery configuration & scheduling
-├── tasks.py               # Background trading tasks
+├── tasks.py               # Trading task functions
 ├── requirements.txt       # Python dependencies
 ├── Procfile              # Heroku process definitions
 ├── .python-version       # Python version (3.12.12)
@@ -149,12 +147,7 @@ vibe-stock-market-predictor/
 - Relationships and constraints
 - Serialization methods (to_dict)
 
-**celery_app.py** - Celery configuration
-- Redis broker/backend setup
-- SSL configuration for Heroku
-- Beat schedule for automated trading (3x daily + health check)
-
-**tasks.py** - Background jobs
+**tasks.py** - Trading task functions
 - `execute_all_trader_decisions()` - Main trading logic
 - `portfolio_health_check()` - Daily performance report
 - Technical indicator calculations
@@ -167,7 +160,6 @@ vibe-stock-market-predictor/
 ### Prerequisites
 - Python 3.12+
 - PostgreSQL (local dev)
-- Redis (local dev)
 - Alpha Vantage API key
 
 ### Local Development
@@ -204,15 +196,11 @@ mise exec -- flask db upgrade
 
 4. **Run the application:**
 ```bash
-# Terminal 1: Flask app
+# Start Flask app
 PORT=5001 mise exec -- python app.py
-
-# Terminal 2: Celery worker
-mise exec -- celery -A celery_app worker --loglevel=info
-
-# Terminal 3: Celery beat (scheduler)
-mise exec -- celery -A celery_app beat --loglevel=info
 ```
+
+Note: Automated trading is handled by GitHub Actions (see SCHEDULER_SETUP.md)
 
 5. **Access the app:**
 - http://localhost:5001
@@ -232,7 +220,7 @@ git push heroku main
 heroku config:set ALPHA_VANTAGE_API_KEY=your_key --app <app_name>
 
 # Scale dynos
-heroku ps:scale web=1 worker=1 beat=1 --app <app_name>
+heroku ps:scale web=1 --app <app_name>
 
 # View logs
 heroku logs --tail --app <app_name>
@@ -293,7 +281,6 @@ AAPL, MSFT, GOOGL, AMZN, TSLA, NVDA, META
 ### Testing
 - Test API endpoints with curl or Postman
 - Verify database changes with psql or pgAdmin
-- Check Celery tasks execute correctly
 - Test UI in browser (Chrome DevTools)
 
 ### Committing Code
@@ -393,7 +380,7 @@ When working on this project:
 ### APIs & Services
 - [Alpha Vantage Docs](https://www.alphavantage.co/documentation/)
 - [Heroku Dev Center](https://devcenter.heroku.com/)
-- [Celery Documentation](https://docs.celeryproject.org/)
+- [GitHub Actions](https://docs.github.com/en/actions)
 
 ### Trading & Finance
 - [Investopedia - Technical Indicators](https://www.investopedia.com/terms/t/technicalindicator.asp)
@@ -423,15 +410,15 @@ When working on this project:
 
 ### Common Tasks
 - **Add new indicator:** Modify `calculate_technical_indicators()` in app.py/tasks.py
-- **Change trading schedule:** Update `beat_schedule` in celery_app.py
-- **Add watchlist ticker:** Update watchlist in `execute_all_trader_decisions()` task
+- **Change trading schedule:** Update GitHub Actions workflows in .github/workflows/
+- **Add watchlist ticker:** Update TradingConfig in src/config
 - **Modify UI:** Edit templates/index.html, static/app.js, static/style.css
 
 ### Debugging Tips
-- Check Celery worker logs: `heroku logs --tail --dyno=worker`
-- Verify Redis connection: `heroku redis:cli --app <app_name>`
+- Check GitHub Actions logs: Go to Actions tab in GitHub repository
 - Test API endpoints: `curl -X POST https://<app_name>.herokuapp.com/api/traders`
 - Database console: `heroku pg:psql --app <app_name>`
+- View Heroku logs: `heroku logs --tail --app <app_name>`
 
 ---
 

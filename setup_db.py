@@ -65,9 +65,8 @@ def setup_database():
     print("\n🎉 Database setup complete!")
     print("\nNext steps:")
     print("1. Start the web server: python app.py")
-    print("2. Start the Celery worker: celery -A celery_app worker --loglevel=info")
-    print("3. Start the Celery beat: celery -A celery_app beat --loglevel=info")
-    print("4. Visit http://localhost:5000 in your browser")
+    print("2. Visit http://localhost:5000 in your browser")
+    print("3. Set up GitHub Actions for automated trading (see SCHEDULER_SETUP.md)")
 
 if __name__ == '__main__':
     setup_database()

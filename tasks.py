@@ -5,7 +5,6 @@ Uses service layer for all business logic
 """
 import os
 import logging
-from celery_app import celery_app
 from alpha_vantage.timeseries import TimeSeries
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -76,7 +75,6 @@ def fetch_and_analyze_ticker(ticker, ts, indicator_service, analysis_service, tr
         return None
 
 
-@celery_app.task(name='tasks.execute_all_trader_decisions')
 def execute_all_trader_decisions(time_of_day='morning'):
     """
     Execute trading decisions for all active traders
@@ -161,7 +159,6 @@ def execute_all_trader_decisions(time_of_day='morning'):
         }
 
 
-@celery_app.task(name='tasks.execute_trader_decisions_by_timezone')
 def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
     """
     Execute trading decisions for traders in a specific timezone
@@ -258,7 +255,6 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
         }
 
 
-@celery_app.task(name='tasks.portfolio_health_check')
 def portfolio_health_check():
     """
     Check portfolio health for all traders after market close
@@ -362,7 +358,6 @@ def update_portfolio_prices():
         }
 
 
-@celery_app.task(name='tasks.execute_single_trade')
 def execute_single_trade(trader_id, ticker):
     """
     Execute a single trade for a specific trader and ticker
