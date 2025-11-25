@@ -22,6 +22,10 @@ function switchTab(tabName) {
     // Load traders if switching to traders tab
     if (tabName === 'traders') {
         loadTraders();
+        loadApiUsage();
+        startApiUsageAutoRefresh();
+    } else {
+        stopApiUsageAutoRefresh();
     }
 }
 
@@ -229,13 +233,28 @@ function displayTraders(traders) {
         const unrealizedSymbol = trader.unrealized_pl >= 0 ? '▲' : '▼';
         const winRateClass = trader.win_rate >= 50 ? 'positive' : 'negative';
 
+        // Watchlist badge
+        const useCustom = trader.use_custom_watchlist || false;
+        const watchlistSize = trader.watchlist_size || 6;
+        const customWatchlist = trader.custom_watchlist || [];
+        let watchlistBadge = '';
+
+        if (useCustom) {
+            watchlistBadge = `<span class="watchlist-badge custom" title="Using custom watchlist with ${customWatchlist.length} tickers">📋 Custom: ${customWatchlist.length} tickers</span>`;
+        } else {
+            watchlistBadge = `<span class="watchlist-badge pool" title="Using pool-based watchlist (${watchlistSize} tickers per session)">🌐 Pool: ${watchlistSize} tickers</span>`;
+        }
+
         const card = document.createElement('div');
         card.className = 'trader-card ' + trader.status;
         card.innerHTML = `
             <div class="trader-header">
                 <div class="trader-info">
                     <h3>${trader.name}</h3>
-                    <span class="trader-status ${trader.status}">${trader.status}</span>
+                    <div class="trader-badges">
+                        <span class="trader-status ${trader.status}">${trader.status}</span>
+                        ${watchlistBadge}
+                    </div>
                 </div>
                 <div class="trader-actions">
                     <button class="icon-btn" onclick="editTrader(${trader.id})" title="Edit Trader">✏️ Edit</button>
@@ -576,6 +595,524 @@ function closeEditModal() {
 }
 
 // ========================================
+// API USAGE DASHBOARD
+// ========================================
+
+let apiUsageRefreshInterval = null;
+
+async function loadApiUsage() {
+    try {
+        const response = await fetch('/api/api-usage?days=1');
+        const data = await response.json();
+
+        if (data && data.today) {
+            displayApiUsageWidget(data);
+        }
+    } catch (error) {
+        console.error('Error loading API usage:', error);
+        document.getElementById('usage-status-message').textContent = 'Failed to load API usage data';
+    }
+}
+
+function displayApiUsageWidget(data) {
+    const today = data.today;
+    const calls = today.calls || 0;
+    const remaining = today.remaining || 0;
+    const limit = today.limit || 25;
+    const percentage = today.percentage_used || 0;
+
+    // Update values
+    document.getElementById('api-calls-today').textContent = calls;
+    document.getElementById('api-calls-remaining').textContent = remaining;
+    document.getElementById('usage-percentage').textContent = Math.round(percentage) + '%';
+
+    // Update progress bar
+    const progressFill = document.getElementById('usage-progress-fill');
+    progressFill.style.width = percentage + '%';
+
+    // Update progress bar color based on usage
+    progressFill.className = 'usage-progress-fill';
+    if (percentage < 60) {
+        progressFill.classList.add('low');
+    } else if (percentage < 80) {
+        progressFill.classList.add('medium');
+    } else {
+        progressFill.classList.add('high');
+    }
+
+    // Update status message
+    let statusMessage = '';
+    if (remaining === 0) {
+        statusMessage = '⚠️ Daily limit reached! Trading paused until tomorrow.';
+    } else if (percentage >= 80) {
+        statusMessage = `⚠️ ${remaining} calls remaining - approaching limit`;
+    } else if (percentage >= 60) {
+        statusMessage = `✓ ${remaining} calls remaining - good capacity`;
+    } else {
+        statusMessage = `✓ ${remaining} calls remaining - excellent capacity`;
+    }
+
+    document.getElementById('usage-status-message').textContent = statusMessage;
+}
+
+async function refreshApiUsage() {
+    const refreshIcon = document.getElementById('api-refresh-icon');
+    refreshIcon.style.animation = 'spin 0.5s linear';
+
+    await loadApiUsage();
+
+    setTimeout(() => {
+        refreshIcon.style.animation = '';
+    }, 500);
+}
+
+function startApiUsageAutoRefresh() {
+    // Refresh every 30 seconds
+    if (apiUsageRefreshInterval) {
+        clearInterval(apiUsageRefreshInterval);
+    }
+    apiUsageRefreshInterval = setInterval(loadApiUsage, 30000);
+}
+
+function stopApiUsageAutoRefresh() {
+    if (apiUsageRefreshInterval) {
+        clearInterval(apiUsageRefreshInterval);
+        apiUsageRefreshInterval = null;
+    }
+}
+
+async function showApiDetailsModal() {
+    try {
+        const response = await fetch('/api/api-usage?days=7');
+        const data = await response.json();
+
+        let detailsHTML = '<div class="api-details">';
+        detailsHTML += '<h3>Last 7 Days API Usage</h3>';
+
+        if (data && data.recent && data.recent.daily_breakdown) {
+            detailsHTML += '<table class="api-table">';
+            detailsHTML += '<tr><th>Date</th><th>Calls</th></tr>';
+
+            data.recent.daily_breakdown.forEach(day => {
+                detailsHTML += `<tr><td>${day.date}</td><td>${day.calls}</td></tr>`;
+            });
+
+            detailsHTML += '</table>';
+            detailsHTML += `<p><strong>Average:</strong> ${data.recent.avg_daily} calls/day</p>`;
+        }
+
+        detailsHTML += '</div>';
+
+        alert(detailsHTML.replace(/<[^>]*>/g, '\n')); // Simple display for now
+    } catch (error) {
+        alert('Error loading API details: ' + error.message);
+    }
+}
+
+// ========================================
+// MODAL TAB SWITCHING
+// ========================================
+
+function switchModalTab(tabName) {
+    // Hide all modal tabs
+    document.querySelectorAll('.modal-tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+
+    // Remove active class from all modal tab buttons
+    document.querySelectorAll('.modal-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    // Show selected tab
+    document.getElementById('modal-' + tabName + '-tab').classList.add('active');
+
+    // Add active class to clicked button
+    event.target.classList.add('active');
+
+    // Load content when switching to specific tabs
+    const traderId = document.getElementById('editTraderId').value;
+    if (tabName === 'watchlist' && traderId) {
+        loadWatchlistConfig(traderId);
+    } else if (tabName === 'history' && traderId) {
+        loadAnalysisHistory(traderId);
+    }
+}
+
+// ========================================
+// WATCHLIST MANAGEMENT
+// ========================================
+
+let currentWatchlistTickers = [];
+
+async function loadWatchlistConfig(traderId) {
+    try {
+        const response = await fetch(`/api/traders/${traderId}/watchlist`);
+        const data = await response.json();
+
+        // Set watchlist size
+        const watchlistSize = data.watchlist_size || 6;
+        document.getElementById('watchlistSize').value = watchlistSize;
+        document.getElementById('watchlistSizeDisplay').textContent = watchlistSize;
+        document.getElementById('poolSizeDisplay').textContent = watchlistSize;
+
+        // Set custom watchlist mode
+        const useCustom = data.use_custom_watchlist || false;
+        document.getElementById('useCustomWatchlist').checked = useCustom;
+
+        // Load custom tickers
+        currentWatchlistTickers = data.custom_watchlist || [];
+
+        // Update UI based on mode
+        toggleWatchlistMode();
+
+        // Display custom tickers if in custom mode
+        if (useCustom && currentWatchlistTickers.length > 0) {
+            displayCustomTickerChips();
+        }
+    } catch (error) {
+        console.error('Error loading watchlist config:', error);
+        alert('Error loading watchlist configuration: ' + error.message);
+    }
+}
+
+function toggleWatchlistMode() {
+    const useCustom = document.getElementById('useCustomWatchlist').checked;
+    const customSection = document.getElementById('custom-watchlist-section');
+    const poolInfo = document.getElementById('pool-watchlist-info');
+
+    if (useCustom) {
+        customSection.style.display = 'block';
+        poolInfo.style.display = 'none';
+        displayCustomTickerChips();
+    } else {
+        customSection.style.display = 'none';
+        poolInfo.style.display = 'block';
+    }
+}
+
+function updateWatchlistSizeDisplay() {
+    const size = document.getElementById('watchlistSize').value;
+    document.getElementById('watchlistSizeDisplay').textContent = size;
+    document.getElementById('poolSizeDisplay').textContent = size;
+}
+
+function displayCustomTickerChips() {
+    const container = document.getElementById('customTickerChips');
+    container.innerHTML = '';
+
+    if (currentWatchlistTickers.length === 0) {
+        container.innerHTML = '<p class="empty-message">No tickers added yet. Click "Add Tickers" to get started.</p>';
+        return;
+    }
+
+    currentWatchlistTickers.forEach(ticker => {
+        const chip = document.createElement('div');
+        chip.className = 'ticker-chip';
+        chip.innerHTML = `
+            <span>${ticker}</span>
+            <button class="chip-remove" onclick="removeTickerFromWatchlist('${ticker}')" title="Remove">×</button>
+        `;
+        container.appendChild(chip);
+    });
+}
+
+function removeTickerFromWatchlist(ticker) {
+    currentWatchlistTickers = currentWatchlistTickers.filter(t => t !== ticker);
+    displayCustomTickerChips();
+}
+
+async function saveWatchlistConfig() {
+    const traderId = document.getElementById('editTraderId').value;
+    const useCustom = document.getElementById('useCustomWatchlist').checked;
+    const watchlistSize = parseInt(document.getElementById('watchlistSize').value);
+
+    // Validate custom tickers if custom mode is enabled
+    if (useCustom && currentWatchlistTickers.length === 0) {
+        alert('Please add at least one ticker to your custom watchlist, or switch to pool-based mode.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/traders/${traderId}/watchlist`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                use_custom_watchlist: useCustom,
+                custom_watchlist: useCustom ? currentWatchlistTickers : null,
+                watchlist_size: watchlistSize
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            alert('Watchlist configuration saved successfully!');
+            loadTraders(); // Refresh trader cards
+        } else {
+            alert('Error: ' + (data.error || 'Failed to save watchlist configuration'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function viewTickerPool() {
+    const traderId = document.getElementById('editTraderId').value;
+    const trader = await fetch(`/api/traders/${traderId}`).then(r => r.json());
+    const timezone = trader.trading_timezone || 'America/New_York';
+
+    // Open ticker browser in view-only mode
+    await openTickerBrowser(false);
+
+    // Filter by timezone/exchange
+    const exchangeMap = {
+        'America/New_York': 'NYSE/NASDAQ',
+        'Europe/London': 'LSE',
+        'Asia/Tokyo': 'TSE'
+    };
+    const exchange = exchangeMap[timezone] || 'NYSE/NASDAQ';
+    document.getElementById('exchangeFilter').value = exchange;
+    await filterTickerPool();
+}
+
+// ========================================
+// TICKER BROWSER
+// ========================================
+
+let tickerPoolData = [];
+let selectedTickers = new Set();
+let isAddMode = true;
+
+async function openTickerBrowser(addMode = true) {
+    isAddMode = addMode;
+    selectedTickers.clear();
+
+    // Load ticker pool
+    document.getElementById('ticker-grid').innerHTML = '<p class="loading-message">Loading tickers...</p>';
+    document.getElementById('ticker-browser-modal').style.display = 'block';
+
+    try {
+        const response = await fetch('/api/ticker-pool');
+        const data = await response.json();
+        tickerPoolData = data.tickers || [];
+
+        // Pre-select current watchlist tickers if in add mode
+        if (isAddMode) {
+            currentWatchlistTickers.forEach(ticker => {
+                selectedTickers.add(ticker);
+            });
+        }
+
+        displayTickerPool(tickerPoolData);
+        updateSelectedCount();
+    } catch (error) {
+        console.error('Error loading ticker pool:', error);
+        document.getElementById('ticker-grid').innerHTML = '<p class="error">Error loading tickers: ' + error.message + '</p>';
+    }
+}
+
+function closeTickerBrowser() {
+    document.getElementById('ticker-browser-modal').style.display = 'none';
+    selectedTickers.clear();
+    tickerPoolData = [];
+
+    // Reset filters
+    document.getElementById('tickerSearchInput').value = '';
+    document.getElementById('sectorFilter').value = '';
+    document.getElementById('exchangeFilter').value = '';
+}
+
+async function filterTickerPool() {
+    const search = document.getElementById('tickerSearchInput').value.toLowerCase();
+    const sector = document.getElementById('sectorFilter').value;
+    const exchange = document.getElementById('exchangeFilter').value;
+
+    let filtered = tickerPoolData.filter(ticker => {
+        const matchesSearch = !search ||
+            ticker.ticker.toLowerCase().includes(search) ||
+            (ticker.name && ticker.name.toLowerCase().includes(search));
+
+        const matchesSector = !sector || ticker.sector === sector;
+        const matchesExchange = !exchange || ticker.exchange === exchange;
+
+        return matchesSearch && matchesSector && matchesExchange;
+    });
+
+    displayTickerPool(filtered);
+}
+
+function displayTickerPool(tickers) {
+    const grid = document.getElementById('ticker-grid');
+
+    if (tickers.length === 0) {
+        grid.innerHTML = '<p class="empty-message">No tickers found matching your filters.</p>';
+        return;
+    }
+
+    grid.innerHTML = '';
+
+    tickers.forEach(ticker => {
+        const isSelected = selectedTickers.has(ticker.ticker);
+        const card = document.createElement('div');
+        card.className = 'ticker-card-browser' + (isSelected ? ' selected' : '');
+        card.onclick = () => toggleTickerSelection(ticker.ticker);
+
+        card.innerHTML = `
+            <div class="ticker-card-header-browser">
+                <span class="ticker-symbol-browser">${ticker.ticker}</span>
+                ${isSelected ? '<span class="selected-badge">✓</span>' : ''}
+            </div>
+            <div class="ticker-name-browser">${ticker.name || 'N/A'}</div>
+            <div class="ticker-meta-browser">
+                <span class="ticker-sector-browser">${ticker.sector || 'N/A'}</span>
+                <span class="ticker-exchange-browser">${ticker.exchange || 'N/A'}</span>
+            </div>
+        `;
+
+        grid.appendChild(card);
+    });
+}
+
+function toggleTickerSelection(ticker) {
+    if (selectedTickers.has(ticker)) {
+        selectedTickers.delete(ticker);
+    } else {
+        selectedTickers.add(ticker);
+    }
+
+    updateSelectedCount();
+
+    // Re-render to update visual state
+    filterTickerPool();
+}
+
+function updateSelectedCount() {
+    document.getElementById('selected-ticker-count').textContent = selectedTickers.size;
+}
+
+function clearTickerSelection() {
+    selectedTickers.clear();
+    updateSelectedCount();
+    filterTickerPool();
+}
+
+function addSelectedTickers() {
+    if (selectedTickers.size === 0) {
+        alert('Please select at least one ticker to add.');
+        return;
+    }
+
+    // Add selected tickers to current watchlist (avoiding duplicates)
+    selectedTickers.forEach(ticker => {
+        if (!currentWatchlistTickers.includes(ticker)) {
+            currentWatchlistTickers.push(ticker);
+        }
+    });
+
+    // Sort alphabetically for better UX
+    currentWatchlistTickers.sort();
+
+    // Update UI
+    displayCustomTickerChips();
+    closeTickerBrowser();
+
+    alert(`Added ${selectedTickers.size} ticker(s) to watchlist. Don't forget to click "Save Watchlist" to persist changes.`);
+}
+
+// ========================================
+// ANALYSIS HISTORY
+// ========================================
+
+async function loadAnalysisHistory(traderId) {
+    const container = document.getElementById('analysis-history-content');
+    container.innerHTML = '<p class="loading-message">Loading analysis history...</p>';
+
+    try {
+        const response = await fetch(`/api/traders/${traderId}/watchlist/history?limit=20`);
+        const data = await response.json();
+
+        if (data.history && data.history.length > 0) {
+            displayAnalysisHistory(data.history);
+        } else {
+            container.innerHTML = '<p class="empty-message">No analysis history yet. This trader hasn\'t run any automated trading sessions.</p>';
+        }
+    } catch (error) {
+        console.error('Error loading analysis history:', error);
+        container.innerHTML = '<p class="error">Error loading analysis history: ' + error.message + '</p>';
+    }
+}
+
+function displayAnalysisHistory(history) {
+    const container = document.getElementById('analysis-history-content');
+
+    let tableHTML = `
+        <table class="analysis-history-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Ticker</th>
+                    <th>Recommendation</th>
+                    <th>Confidence</th>
+                    <th>Price</th>
+                    <th>Signals</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    history.forEach(item => {
+        const date = new Date(item.created_at).toLocaleString();
+        const recClass = item.recommendation ? item.recommendation.replace(' ', '-').toLowerCase() : 'neutral';
+        const confidence = item.confidence ? item.confidence + '%' : 'N/A';
+        const price = item.price ? '$' + item.price.toFixed(2) : 'N/A';
+
+        // Parse signals JSON if it exists
+        let signalsHTML = 'N/A';
+        if (item.signals) {
+            try {
+                const signals = typeof item.signals === 'string' ? JSON.parse(item.signals) : item.signals;
+                if (Array.isArray(signals) && signals.length > 0) {
+                    signalsHTML = signals.slice(0, 2).join(', ');
+                    if (signals.length > 2) {
+                        signalsHTML += ` +${signals.length - 2} more`;
+                    }
+                }
+            } catch (e) {
+                signalsHTML = 'N/A';
+            }
+        }
+
+        tableHTML += `
+            <tr>
+                <td>${date}</td>
+                <td><strong>${item.ticker}</strong></td>
+                <td><span class="rec-badge ${recClass}">${item.recommendation || 'N/A'}</span></td>
+                <td>${confidence}</td>
+                <td>${price}</td>
+                <td class="signals-cell">${signalsHTML}</td>
+            </tr>
+        `;
+    });
+
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+
+    container.innerHTML = tableHTML;
+}
+
+async function refreshAnalysisHistory() {
+    const traderId = document.getElementById('editTraderId').value;
+    if (traderId) {
+        await loadAnalysisHistory(traderId);
+    }
+}
+
+// ========================================
 // INITIALIZATION
 // ========================================
 
@@ -587,11 +1124,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Close modal when clicking outside
+    // Close modals when clicking outside
     window.onclick = function (event) {
-        const modal = document.getElementById('edit-trader-modal');
-        if (event.target === modal) {
+        const editModal = document.getElementById('edit-trader-modal');
+        const tickerModal = document.getElementById('ticker-browser-modal');
+        const chartsModal = document.getElementById('charts-modal');
+
+        if (event.target === editModal) {
             closeEditModal();
+        } else if (event.target === tickerModal) {
+            closeTickerBrowser();
+        } else if (event.target === chartsModal) {
+            closeChartsModal();
         }
     };
 });

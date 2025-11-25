@@ -68,6 +68,49 @@
 
         <!-- Machine Traders Tab -->
         <div id="traders-tab" class="tab-content">
+            <!-- API Usage Dashboard Widget -->
+            <div class="api-usage-widget">
+                <div class="widget-header">
+                    <h3>🔌 API Usage Dashboard</h3>
+                    <button class="icon-btn" onclick="refreshApiUsage()" title="Refresh">
+                        <span id="api-refresh-icon">🔄</span>
+                    </button>
+                </div>
+                <div class="widget-content">
+                    <div class="usage-summary">
+                        <div class="usage-stat">
+                            <div class="usage-label">Today's Usage</div>
+                            <div class="usage-value" id="api-calls-today">-</div>
+                        </div>
+                        <div class="usage-stat">
+                            <div class="usage-label">Remaining</div>
+                            <div class="usage-value" id="api-calls-remaining">-</div>
+                        </div>
+                        <div class="usage-stat">
+                            <div class="usage-label">Daily Limit</div>
+                            <div class="usage-value">25</div>
+                        </div>
+                    </div>
+                    <div class="usage-progress-container">
+                        <div class="usage-progress-label">
+                            <span>Quota Used</span>
+                            <span id="usage-percentage">0%</span>
+                        </div>
+                        <div class="usage-progress-bar">
+                            <div class="usage-progress-fill" id="usage-progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="usage-status-message" id="usage-status-message">
+                            Loading API usage data...
+                        </div>
+                    </div>
+                    <div class="usage-actions">
+                        <button class="secondary-btn btn-sm" onclick="showApiDetailsModal()">
+                            📊 View Details
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Trader Creation Section -->
             <div class="trader-section">
                 <div class="section-header">
@@ -133,48 +176,169 @@
 
     <!-- Edit Trader Modal -->
     <div id="edit-trader-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content modal-wide">
             <span class="close" onclick="closeEditModal()">&times;</span>
             <h2>Edit Trader</h2>
-            <div id="edit-trader-form" class="trader-form">
-                <input type="hidden" id="editTraderId" />
-                <div class="form-group">
-                    <label>Trader Name</label>
-                    <input type="text" id="editTraderName" />
-                </div>
-                <div class="form-row">
+
+            <!-- Modal Tab Navigation -->
+            <div class="modal-tab-nav">
+                <button class="modal-tab-btn active" onclick="switchModalTab('settings')">⚙️ Settings</button>
+                <button class="modal-tab-btn" onclick="switchModalTab('watchlist')">📋 Watchlist</button>
+                <button class="modal-tab-btn" onclick="switchModalTab('history')">📊 Analysis History</button>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="modal-settings-tab" class="modal-tab-content active">
+                <div id="edit-trader-form" class="trader-form">
+                    <input type="hidden" id="editTraderId" />
                     <div class="form-group">
-                        <label>Risk Tolerance</label>
-                        <select id="editRiskTolerance">
-                            <option value="low">Low - Conservative</option>
-                            <option value="medium">Medium - Balanced</option>
-                            <option value="high">High - Aggressive</option>
+                        <label>Trader Name</label>
+                        <input type="text" id="editTraderName" />
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Risk Tolerance</label>
+                            <select id="editRiskTolerance">
+                                <option value="low">Low - Conservative</option>
+                                <option value="medium">Medium - Balanced</option>
+                                <option value="high">High - Aggressive</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select id="editStatus">
+                                <option value="active">Active</option>
+                                <option value="paused">Paused</option>
+                                <option value="disabled">Disabled</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Trading Timezone / Exchange</label>
+                        <select id="editTradingTimezone">
+                            <option value="America/New_York">🇺🇸 NYSE (New York) - 9:30 AM - 4:00 PM EST</option>
+                            <option value="Europe/London">🇬🇧 LSE (London) - 8:00 AM - 4:30 PM GMT</option>
+                            <option value="Asia/Tokyo">🇯🇵 TSE (Tokyo) - 9:00 AM - 3:00 PM JST</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Status</label>
-                        <select id="editStatus">
-                            <option value="active">Active</option>
-                            <option value="paused">Paused</option>
-                            <option value="disabled">Disabled</option>
-                        </select>
+                        <label>Trading Ethos / Philosophy</label>
+                        <textarea id="editTradingEthos" rows="4"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button class="secondary-btn" onclick="closeEditModal()">Cancel</button>
+                        <button class="primary-btn" onclick="updateTrader()">Save Changes</button>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label>Trading Timezone / Exchange</label>
-                    <select id="editTradingTimezone">
-                        <option value="America/New_York">🇺🇸 NYSE (New York) - 9:30 AM - 4:00 PM EST</option>
-                        <option value="Europe/London">🇬🇧 LSE (London) - 8:00 AM - 4:30 PM GMT</option>
-                        <option value="Asia/Tokyo">🇯🇵 TSE (Tokyo) - 9:00 AM - 3:00 PM JST</option>
-                    </select>
+            </div>
+
+            <!-- Watchlist Tab -->
+            <div id="modal-watchlist-tab" class="modal-tab-content">
+                <div class="watchlist-manager">
+                    <div class="watchlist-header">
+                        <h3>Watchlist Configuration</h3>
+                        <div class="watchlist-mode-toggle">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="useCustomWatchlist" onchange="toggleWatchlistMode()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-label">Use Custom Watchlist</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Analysis Budget (Tickers per Session)</label>
+                        <div class="slider-container">
+                            <input type="range" id="watchlistSize" min="3" max="10" value="6" oninput="updateWatchlistSizeDisplay()">
+                            <span id="watchlistSizeDisplay">6</span> tickers
+                        </div>
+                        <small>Higher values analyze more stocks but may hit API limits faster</small>
+                    </div>
+
+                    <div id="custom-watchlist-section" style="display: none;">
+                        <div class="form-group">
+                            <label>Custom Tickers</label>
+                            <div class="ticker-chips" id="customTickerChips"></div>
+                            <button class="secondary-btn" onclick="openTickerBrowser()">
+                                ➕ Add Tickers
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="pool-watchlist-info">
+                        <div class="info-box">
+                            <p><strong>🌐 Using Timezone-Based Pool</strong></p>
+                            <p>Randomly selects <span id="poolSizeDisplay">6</span> tickers each session from your exchange's pool.</p>
+                            <button class="secondary-btn btn-sm" onclick="viewTickerPool()">
+                                👁️ View Available Tickers
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="secondary-btn" onclick="closeEditModal()">Cancel</button>
+                        <button class="primary-btn" onclick="saveWatchlistConfig()">Save Watchlist</button>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Trading Ethos / Philosophy</label>
-                    <textarea id="editTradingEthos" rows="4"></textarea>
+            </div>
+
+            <!-- Analysis History Tab -->
+            <div id="modal-history-tab" class="modal-tab-content">
+                <div class="analysis-history">
+                    <div class="history-header">
+                        <h3>Recent Analysis History</h3>
+                        <button class="icon-btn" onclick="refreshAnalysisHistory()">🔄</button>
+                    </div>
+                    <div id="analysis-history-content">
+                        <p class="loading-message">Loading analysis history...</p>
+                    </div>
                 </div>
-                <div class="form-actions">
-                    <button class="secondary-btn" onclick="closeEditModal()">Cancel</button>
-                    <button class="primary-btn" onclick="updateTrader()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ticker Browser Modal -->
+    <div id="ticker-browser-modal" class="modal">
+        <div class="modal-content modal-wide">
+            <span class="close" onclick="closeTickerBrowser()">&times;</span>
+            <h2>Browse Ticker Pool</h2>
+
+            <!-- Search and Filters -->
+            <div class="ticker-browser-controls">
+                <input type="text" id="tickerSearchInput" placeholder="Search by ticker or name..." oninput="filterTickerPool()">
+                <select id="sectorFilter" onchange="filterTickerPool()">
+                    <option value="">All Sectors</option>
+                    <option value="Technology">Technology</option>
+                    <option value="Financial Services">Financial Services</option>
+                    <option value="Healthcare">Healthcare</option>
+                    <option value="Consumer Cyclical">Consumer Cyclical</option>
+                    <option value="Consumer Defensive">Consumer Defensive</option>
+                    <option value="Energy">Energy</option>
+                    <option value="Communication Services">Communication Services</option>
+                    <option value="Automotive">Automotive</option>
+                </select>
+                <select id="exchangeFilter" onchange="filterTickerPool()">
+                    <option value="">All Exchanges</option>
+                    <option value="NYSE/NASDAQ">NYSE/NASDAQ</option>
+                    <option value="LSE">LSE (London)</option>
+                    <option value="TSE">TSE (Tokyo)</option>
+                </select>
+            </div>
+
+            <!-- Ticker Grid -->
+            <div id="ticker-grid" class="ticker-grid">
+                <p class="loading-message">Loading tickers...</p>
+            </div>
+
+            <!-- Actions -->
+            <div class="ticker-browser-actions">
+                <div class="selected-count">
+                    <span id="selected-ticker-count">0</span> tickers selected
+                </div>
+                <div class="action-buttons">
+                    <button class="secondary-btn" onclick="clearTickerSelection()">Clear Selection</button>
+                    <button class="secondary-btn" onclick="closeTickerBrowser()">Cancel</button>
+                    <button class="primary-btn" onclick="addSelectedTickers()">Add Selected</button>
                 </div>
             </div>
         </div>
