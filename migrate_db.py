@@ -38,41 +38,52 @@ def migrate_database():
 
     try:
         with app.app_context():
-            # Check if trading_ethos column exists
+            # First, check if traders table exists at all
             result = db.session.execute(text("""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name='traders' AND column_name='trading_ethos'
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_name='traders'
             """))
 
             if result.fetchone() is None:
-                print("➕ Adding trading_ethos column to traders table...")
-                db.session.execute(text("""
-                    ALTER TABLE traders
-                    ADD COLUMN trading_ethos TEXT
-                """))
-                db.session.commit()
-                print("✅ Added trading_ethos column successfully!")
+                print("⚠️  Traders table doesn't exist yet - skipping column migrations")
+                print("   (Tables will be created by setup_db.py)")
             else:
-                print("✓ trading_ethos column already exists")
-
-            # Check if trading_timezone column exists
-            result = db.session.execute(text("""
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_name='traders' AND column_name='trading_timezone'
-            """))
-
-            if result.fetchone() is None:
-                print("➕ Adding trading_timezone column to traders table...")
-                db.session.execute(text("""
-                    ALTER TABLE traders
-                    ADD COLUMN trading_timezone VARCHAR(50) DEFAULT 'America/New_York' NOT NULL
+                # Check if trading_ethos column exists
+                result = db.session.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name='traders' AND column_name='trading_ethos'
                 """))
-                db.session.commit()
-                print("✅ Added trading_timezone column successfully!")
-            else:
-                print("✓ trading_timezone column already exists")
+
+                if result.fetchone() is None:
+                    print("➕ Adding trading_ethos column to traders table...")
+                    db.session.execute(text("""
+                        ALTER TABLE traders
+                        ADD COLUMN trading_ethos TEXT
+                    """))
+                    db.session.commit()
+                    print("✅ Added trading_ethos column successfully!")
+                else:
+                    print("✓ trading_ethos column already exists")
+
+                # Check if trading_timezone column exists
+                result = db.session.execute(text("""
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name='traders' AND column_name='trading_timezone'
+                """))
+
+                if result.fetchone() is None:
+                    print("➕ Adding trading_timezone column to traders table...")
+                    db.session.execute(text("""
+                        ALTER TABLE traders
+                        ADD COLUMN trading_timezone VARCHAR(50) DEFAULT 'America/New_York' NOT NULL
+                    """))
+                    db.session.commit()
+                    print("✅ Added trading_timezone column successfully!")
+                else:
+                    print("✓ trading_timezone column already exists")
 
             # Check if ticker_prices table exists
             result = db.session.execute(text("""
