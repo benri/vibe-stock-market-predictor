@@ -147,22 +147,6 @@ Visit your app and go to the **Machine Traders** tab to see:
 - Verify Alpha Vantage API key is set and working
 - Ensure traders are in `active` status
 
-## Cost Savings
-
-### Before (with Celery workers)
-- Web dyno: $7/month
-- Worker dyno: $7/month
-- Beat dyno: $7/month (or combined with worker)
-- Redis addon: $0-5/month
-- **Total: ~$21-26/month**
-
-### After (with GitHub Actions)
-- Web dyno: $7/month
-- GitHub Actions: $0/month (2000 minutes free)
-- **Total: ~$7/month**
-
-**Savings: ~$14-19/month (66-73% reduction)**
-
 ## Alternative Schedulers
 
 If you prefer not to use GitHub Actions, you can also use:
