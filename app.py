@@ -92,8 +92,9 @@ def analyze():
             try:
                 logger.info(f"Fetching data for {ticker.upper()}")
 
-                # Fetch stock data from Alpha Vantage (6 months = ~180 days)
-                df, meta_data = ts.get_daily(symbol=ticker.upper(), outputsize='full')
+                # Fetch stock data from Alpha Vantage (compact = last ~100 data points)
+                # Free tier doesn't support outputsize='full'
+                df, meta_data = ts.get_daily(symbol=ticker.upper(), outputsize='compact')
 
                 # Rename columns to match expected format (Alpha Vantage uses '4. close' format)
                 df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
@@ -101,9 +102,7 @@ def analyze():
                 # Sort by date ascending (Alpha Vantage returns newest first)
                 df = df.sort_index(ascending=True)
 
-                # Get last 6 months of data
-                six_months_ago = datetime.now() - timedelta(days=180)
-                df = df[df.index >= six_months_ago]
+                # Compact gives us ~100 days of data, sufficient for technical analysis
 
                 logger.info(f"Retrieved {len(df)} rows for {ticker.upper()}")
 

@@ -38,14 +38,13 @@ def fetch_and_analyze_ticker(ticker, ts, indicator_service, analysis_service, tr
     try:
         logger.info(f"Analyzing {ticker}...")
 
-        # Fetch stock data
-        df, _ = ts.get_daily(symbol=ticker, outputsize='full')
+        # Fetch stock data (compact = last ~100 data points, suitable for technical analysis)
+        df, _ = ts.get_daily(symbol=ticker, outputsize='compact')
         df.columns = ['Open', 'High', 'Low', 'Close', 'Volume']
         df = df.sort_index(ascending=True)
 
-        # Get last 6 months
-        six_months_ago = datetime.now() - timedelta(days=180)
-        df = df[df.index >= six_months_ago]
+        # Compact gives us ~100 days, which is sufficient for technical indicators
+        # (we need at least 50 days for SMA-50)
 
         if df.empty or not indicator_service.has_sufficient_data(df):
             logger.warning(f"Insufficient data for {ticker}: {len(df) if not df.empty else 0} rows")
