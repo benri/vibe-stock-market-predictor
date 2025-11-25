@@ -462,6 +462,192 @@ def trader_performance_history(trader_id):
     })
 
 
+# ===== Watchlist Management Endpoints =====
+
+@app.route('/api/traders/<int:trader_id>/watchlist', methods=['GET', 'PUT', 'DELETE'])
+def manage_trader_watchlist(trader_id):
+    """
+    Manage custom watchlist for a trader
+
+    GET: Get current watchlist configuration
+    PUT: Set custom watchlist
+    DELETE: Clear custom watchlist (revert to timezone-based pool)
+    """
+    from src.services.watchlist_service import WatchlistService
+
+    trader = Trader.query.get(trader_id)
+    if not trader:
+        return jsonify({'error': 'Trader not found'}), 404
+
+    if request.method == 'GET':
+        return jsonify({
+            'trader_id': trader_id,
+            'trader_name': trader.name,
+            'use_custom_watchlist': trader.use_custom_watchlist,
+            'custom_watchlist': trader.custom_watchlist,
+            'watchlist_size': trader.watchlist_size,
+            'trading_timezone': trader.trading_timezone
+        })
+
+    elif request.method == 'PUT':
+        data = request.get_json()
+        tickers = data.get('tickers', [])
+        watchlist_size = data.get('watchlist_size')
+
+        if not isinstance(tickers, list):
+            return jsonify({'error': 'Tickers must be an array'}), 400
+
+        success = WatchlistService.set_custom_watchlist(trader_id, tickers, db)
+
+        if watchlist_size is not None and isinstance(watchlist_size, int) and watchlist_size > 0:
+            trader.watchlist_size = watchlist_size
+            db.session.commit()
+
+        if success:
+            return jsonify({
+                'message': 'Custom watchlist set successfully',
+                'trader_id': trader_id,
+                'custom_watchlist': trader.custom_watchlist,
+                'watchlist_size': trader.watchlist_size
+            })
+        else:
+            return jsonify({'error': 'Failed to set custom watchlist'}), 500
+
+    elif request.method == 'DELETE':
+        success = WatchlistService.clear_custom_watchlist(trader_id, db)
+
+        if success:
+            return jsonify({
+                'message': 'Custom watchlist cleared',
+                'trader_id': trader_id
+            })
+        else:
+            return jsonify({'error': 'Failed to clear custom watchlist'}), 500
+
+
+@app.route('/api/traders/<int:trader_id>/watchlist/pool', methods=['GET'])
+def get_trader_watchlist_pool(trader_id):
+    """Get available ticker pool for a trader"""
+    from src.services.watchlist_service import WatchlistService
+
+    trader = Trader.query.get(trader_id)
+    if not trader:
+        return jsonify({'error': 'Trader not found'}), 404
+
+    pool = WatchlistService.get_trader_watchlist_pool(trader_id, trader.trading_timezone)
+
+    return jsonify({
+        'trader_id': trader_id,
+        'trader_name': trader.name,
+        'timezone': trader.trading_timezone,
+        'use_custom_watchlist': trader.use_custom_watchlist,
+        'pool_size': len(pool),
+        'tickers': pool
+    })
+
+
+@app.route('/api/traders/<int:trader_id>/watchlist/history', methods=['GET'])
+def get_trader_analysis_history(trader_id):
+    """Get recent analysis history for a trader"""
+    from src.services.watchlist_service import WatchlistService
+
+    trader = Trader.query.get(trader_id)
+    if not trader:
+        return jsonify({'error': 'Trader not found'}), 404
+
+    limit = request.args.get('limit', 50, type=int)
+    history = WatchlistService.get_analysis_history(trader_id, trader.trading_timezone, limit)
+
+    return jsonify({
+        'trader_id': trader_id,
+        'trader_name': trader.name,
+        'timezone': trader.trading_timezone,
+        'history': history
+    })
+
+
+@app.route('/api/ticker-pool', methods=['GET'])
+def get_ticker_pool():
+    """Get ticker pool with optional filtering"""
+    from models import TickerPool
+
+    timezone = request.args.get('timezone')
+    exchange = request.args.get('exchange')
+    sector = request.args.get('sector')
+    source = request.args.get('source')
+    active_only = request.args.get('active_only', 'true').lower() == 'true'
+
+    query = TickerPool.query
+
+    if active_only:
+        query = query.filter_by(is_active=True)
+    if timezone:
+        query = query.filter_by(timezone=timezone)
+    if exchange:
+        query = query.filter_by(exchange=exchange)
+    if sector:
+        query = query.filter_by(sector=sector)
+    if source:
+        query = query.filter_by(source=source)
+
+    tickers = query.all()
+
+    return jsonify({
+        'count': len(tickers),
+        'tickers': [t.to_dict() for t in tickers]
+    })
+
+
+@app.route('/api/ticker-pool/stats', methods=['GET'])
+def get_ticker_pool_stats():
+    """Get statistics about the ticker pool"""
+    from src.services.ticker_source_service import TickerSourceService
+
+    stats = TickerSourceService.get_ticker_pool_stats(db)
+
+    return jsonify(stats)
+
+
+@app.route('/api/ticker-pool/refresh', methods=['POST'])
+@require_api_key
+def refresh_ticker_pool():
+    """Refresh ticker pool from external sources (Wikipedia)"""
+    from src.services.ticker_source_service import TickerSourceService
+
+    try:
+        logger.info("Starting ticker pool refresh...")
+        results = TickerSourceService.refresh_ticker_pools(db)
+
+        return jsonify({
+            'message': 'Ticker pool refresh completed',
+            'results': results
+        })
+    except Exception as e:
+        logger.error(f"Error refreshing ticker pool: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/watchlist/stats', methods=['GET'])
+def get_watchlist_stats():
+    """Get statistics about watchlist usage"""
+    from src.services.watchlist_service import WatchlistService
+
+    stats = WatchlistService.get_watchlist_stats(db)
+
+    return jsonify(stats)
+
+
+@app.route('/api/api-usage', methods=['GET'])
+def get_api_usage():
+    """Get API usage statistics"""
+    from src.services.api_limit_service import ApiLimitService
+
+    days = request.args.get('days', 7, type=int)
+    stats = ApiLimitService.get_usage_stats(db, days)
+
+    return jsonify(stats)
+
+
 @app.route('/api/trades', methods=['GET'])
 def all_trades():
     """Get all trades across all traders"""

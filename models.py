@@ -40,6 +40,11 @@ class Trader(db.Model):
     trading_ethos = db.Column(db.Text, nullable=True)
     trading_timezone = db.Column(db.String(50), nullable=False, default='America/New_York')
 
+    # Custom watchlist configuration
+    custom_watchlist = db.Column(db.JSON, nullable=True)  # Array of ticker symbols
+    watchlist_size = db.Column(db.Integer, nullable=False, default=6)  # Discovery tickers per session
+    use_custom_watchlist = db.Column(db.Boolean, nullable=False, default=False)
+
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     last_trade_at = db.Column(db.DateTime, nullable=True)
@@ -141,6 +146,9 @@ class Trader(db.Model):
             'risk_tolerance': self.risk_tolerance,
             'trading_ethos': self.trading_ethos,
             'trading_timezone': self.trading_timezone,
+            'custom_watchlist': self.custom_watchlist,
+            'watchlist_size': self.watchlist_size,
+            'use_custom_watchlist': self.use_custom_watchlist,
             'created_at': self.created_at.isoformat(),
             'last_trade_at': self.last_trade_at.isoformat() if self.last_trade_at else None,
             'total_trades': len(all_trades),
@@ -285,4 +293,104 @@ class TickerPrice(db.Model):
             'ticker': self.ticker,
             'current_price': float(self.current_price),
             'last_updated': self.last_updated.isoformat()
+        }
+
+
+class ApiUsageLog(db.Model):
+    """Track daily API usage to manage rate limits"""
+    __tablename__ = 'api_usage_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False, unique=True, index=True)
+    call_count = db.Column(db.Integer, nullable=False, default=0)
+    last_reset = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<ApiUsageLog {self.date}: {self.call_count} calls>'
+
+    def to_dict(self):
+        """Convert API usage log to dictionary"""
+        return {
+            'id': self.id,
+            'date': self.date.isoformat(),
+            'call_count': self.call_count,
+            'last_reset': self.last_reset.isoformat(),
+            'created_at': self.created_at.isoformat()
+        }
+
+
+class TickerPool(db.Model):
+    """Pool of available tickers for trading analysis"""
+    __tablename__ = 'ticker_pool'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ticker = db.Column(db.String(10), nullable=False, index=True)
+    name = db.Column(db.String(200), nullable=True)
+    exchange = db.Column(db.String(50), nullable=False, index=True)  # NYSE, NASDAQ, LSE, TSE
+    timezone = db.Column(db.String(50), nullable=False, index=True)  # America/New_York, Europe/London, Asia/Tokyo
+    market_cap = db.Column(db.Numeric(20, 2), nullable=True)  # Market capitalization
+    sector = db.Column(db.String(100), nullable=True, index=True)  # Technology, Finance, Healthcare, etc.
+    is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+
+    # Metadata
+    source = db.Column(db.String(50), nullable=True)  # sp500, ftse100, nikkei225, custom
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    last_updated = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Unique constraint
+    __table_args__ = (
+        db.UniqueConstraint('ticker', 'exchange', name='unique_ticker_exchange'),
+    )
+
+    def __repr__(self):
+        return f'<TickerPool {self.ticker} ({self.exchange})>'
+
+    def to_dict(self):
+        """Convert ticker pool entry to dictionary"""
+        return {
+            'id': self.id,
+            'ticker': self.ticker,
+            'name': self.name,
+            'exchange': self.exchange,
+            'timezone': self.timezone,
+            'market_cap': float(self.market_cap) if self.market_cap else None,
+            'sector': self.sector,
+            'is_active': self.is_active,
+            'source': self.source,
+            'created_at': self.created_at.isoformat(),
+            'last_updated': self.last_updated.isoformat()
+        }
+
+
+class TickerRotation(db.Model):
+    """Track which tickers have been analyzed to ensure rotation"""
+    __tablename__ = 'ticker_rotation'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ticker = db.Column(db.String(10), nullable=False, index=True)
+    timezone = db.Column(db.String(50), nullable=False, index=True)
+    trader_id = db.Column(db.Integer, db.ForeignKey('traders.id'), nullable=True, index=True)  # NULL = all traders
+
+    # Tracking
+    last_analyzed_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    analysis_count = db.Column(db.Integer, nullable=False, default=0)
+
+    # Unique constraint per ticker-timezone-trader combination
+    __table_args__ = (
+        db.UniqueConstraint('ticker', 'timezone', 'trader_id', name='unique_ticker_timezone_trader'),
+    )
+
+    def __repr__(self):
+        return f'<TickerRotation {self.ticker} ({self.timezone}): analyzed {self.analysis_count} times>'
+
+    def to_dict(self):
+        """Convert ticker rotation entry to dictionary"""
+        return {
+            'id': self.id,
+            'ticker': self.ticker,
+            'timezone': self.timezone,
+            'trader_id': self.trader_id,
+            'last_analyzed_at': self.last_analyzed_at.isoformat(),
+            'analysis_count': self.analysis_count
         }

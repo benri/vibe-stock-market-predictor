@@ -161,6 +161,7 @@ def execute_all_trader_decisions(time_of_day='morning'):
 def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
     """
     Execute trading decisions for traders in a specific timezone
+    Uses hybrid dynamic watchlist system with portfolio-first prioritization
 
     Args:
         timezone: Trading timezone (e.g., 'America/New_York', 'Europe/London', 'Asia/Tokyo')
@@ -169,10 +170,15 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
     from app import app
     from models import db, Trader, TraderStatus
     from src.services import IndicatorService, TradingAnalysisService, TradingService
+    from src.services.watchlist_service import WatchlistService
+    from src.services.api_limit_service import ApiLimitService
     from src.config import TradingConfig
 
     with app.app_context():
-        logger.info(f"Starting {time_of_day} trading session for {timezone} timezone")
+        logger.info(f"🚀 Starting {time_of_day} trading session for {timezone} timezone")
+
+        # Initialize API cache
+        ApiLimitService.initialize_cache()
 
         # Get all active traders for the specific timezone
         traders = Trader.query.filter_by(
@@ -196,23 +202,62 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
         analysis_service = TradingAnalysisService(indicator_service)
         trading_service = TradingService()
 
-        # Get watchlist for timezone using config
-        watchlist = TradingConfig.get_watchlist(timezone)
+        # Check API capacity before starting
+        avg_tickers_per_trader = 8  # Estimate: 2-3 portfolio + 5-8 discovery
+        capacity = ApiLimitService.estimate_remaining_capacity(db, len(traders), avg_tickers_per_trader)
+        logger.info(capacity['message'])
+
+        if not capacity['can_proceed']:
+            logger.warning("⚠️ Insufficient API capacity - aborting trading session")
+            return {
+                'status': 'aborted',
+                'message': 'Insufficient API quota remaining',
+                'timezone': timezone,
+                'time_of_day': time_of_day,
+                'capacity_info': capacity
+            }
 
         ts = TimeSeries(key=ALPHA_VANTAGE_API_KEY, output_format='pandas')
         results = []
+        api_calls_made = 0
 
         for trader in traders:
-            logger.info(f"Processing trader: {trader.name} (Timezone: {timezone})")
+            logger.info(f"📊 Processing trader: {trader.name} (Timezone: {timezone})")
+
+            # Get dynamic watchlist using hybrid system
+            watchlist = WatchlistService.get_priority_tickers(
+                trader_id=trader.id,
+                timezone=timezone,
+                db=db,
+                limit=trader.watchlist_size if trader.watchlist_size else 6
+            )
+
+            if not watchlist:
+                logger.warning(f"No tickers in watchlist for trader {trader.name}")
+                continue
 
             # Get trader's current portfolio tickers
             portfolio_tickers = trading_service.get_trader_portfolio_tickers(trader.id)
 
-            # Analyze each ticker in watchlist
+            # Analyze each ticker in dynamic watchlist
             for ticker in watchlist:
+                # Check API limits before making request
+                can_request, reason = ApiLimitService.can_make_request(db)
+                if not can_request:
+                    logger.warning(f"⚠️ API limit reached: {reason}. Stopping analysis.")
+                    break
+
+                # Throttle request to respect rate limits
+                ApiLimitService.throttle_request()
+
+                # Fetch and analyze ticker
                 decision = fetch_and_analyze_ticker(
                     ticker, ts, indicator_service, analysis_service, trader
                 )
+
+                # Record API call
+                ApiLimitService.record_api_call(db)
+                api_calls_made += 1
 
                 if not decision:
                     continue
@@ -235,7 +280,10 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
         # Commit all trades
         db.session.commit()
 
-        logger.info(f"Completed {time_of_day} trading session for {timezone}. Executed {len(results)} trades")
+        logger.info(f"✅ Completed {time_of_day} trading session for {timezone}")
+        logger.info(f"   📊 Traders processed: {len(traders)}")
+        logger.info(f"   📈 Trades executed: {len(results)}")
+        logger.info(f"   🔌 API calls made: {api_calls_made}")
 
         # Update portfolio prices after trading
         try:
@@ -244,12 +292,17 @@ def execute_trader_decisions_by_timezone(timezone, time_of_day='morning'):
         except Exception as e:
             logger.error(f"Error updating portfolio prices: {str(e)}")
 
+        # Get final API usage stats
+        usage_stats = ApiLimitService.get_usage_stats(db, days=1)
+
         return {
             'status': 'success',
             'timezone': timezone,
             'time_of_day': time_of_day,
             'traders_processed': len(traders),
             'trades_executed': len(results),
+            'api_calls_made': api_calls_made,
+            'api_usage': usage_stats['today'] if usage_stats else {},
             'trades': results
         }
 

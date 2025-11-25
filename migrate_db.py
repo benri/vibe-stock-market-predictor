@@ -112,6 +112,15 @@ def migrate_database():
 
             print("\n🎉 Database migration complete!")
 
+            # Run watchlist system migration
+            print("\n=== Running Watchlist System Migration ===")
+            try:
+                from migrate_watchlist_system import migrate_database as migrate_watchlist
+                # The watchlist migration runs in its own app context
+                migrate_watchlist()
+            except Exception as e:
+                print(f"⚠️  Watchlist migration failed (may already be applied): {e}")
+
     except Exception as e:
         print(f"❌ Error during migration: {e}")
         import traceback
