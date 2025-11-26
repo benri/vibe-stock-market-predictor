@@ -6,6 +6,7 @@
     <title>Vibe Stock Market Predictor</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -15,13 +16,25 @@
         </header>
 
         <!-- Tab Navigation -->
-        <div class="tab-nav">
-            <button class="tab-btn active" onclick="switchTab('analysis')">Stock Analysis</button>
-            <button class="tab-btn" onclick="switchTab('traders')">Machine Traders</button>
-        </div>
+        <div x-data="tabManager({ tabs: ['analysis', 'traders'], default: 'analysis', onTabChange: (tab) => { if(tab === 'traders') { $store.traders.load(); $store.apiUsage.startAutoRefresh(); } else { $store.apiUsage.stopAutoRefresh(); } } })"
+             @keydown.escape.window="if(currentTab) $event.stopPropagation()">
+            <div class="tab-nav">
+                <button class="tab-btn"
+                        :class="{ 'active': isActive('analysis') }"
+                        @click="selectTab('analysis')">
+                    Stock Analysis
+                </button>
+                <button class="tab-btn"
+                        :class="{ 'active': isActive('traders') }"
+                        @click="selectTab('traders')">
+                    Machine Traders
+                </button>
+            </div>
 
         <!-- Stock Analysis Tab -->
-        <div id="analysis-tab" class="tab-content active">
+        <div id="analysis-tab" class="tab-content"
+             x-show="isActive('analysis')"
+             x-transition>
             <div class="input-section">
                 <div class="input-group">
                     <input type="text" id="tickerInput" placeholder="Enter stock tickers (e.g., AAPL, TSLA, MSFT)" />
@@ -29,10 +42,10 @@
                 </div>
                 <div class="quick-picks">
                     <span>Quick picks:</span>
-                    <button class="quick-btn" onclick="setTickers('AAPL,MSFT,GOOGL')">Tech Giants</button>
-                    <button class="quick-btn" onclick="setTickers('TSLA,NIO,RIVN')">EV Stocks</button>
-                    <button class="quick-btn" onclick="setTickers('JPM,BAC,WFC')">Banks</button>
-                    <button class="quick-btn" onclick="setTickers('NVDA,AMD,INTC')">Semiconductors</button>
+                    <button class="quick-btn" @click="setTickers('AAPL,MSFT,GOOGL')">Tech Giants</button>
+                    <button class="quick-btn" @click="setTickers('TSLA,NIO,RIVN')">EV Stocks</button>
+                    <button class="quick-btn" @click="setTickers('JPM,BAC,WFC')">Banks</button>
+                    <button class="quick-btn" @click="setTickers('NVDA,AMD,INTC')">Semiconductors</button>
                 </div>
             </div>
 
@@ -67,7 +80,9 @@
         </div>
 
         <!-- Machine Traders Tab -->
-        <div id="traders-tab" class="tab-content">
+        <div id="traders-tab" class="tab-content"
+             x-show="isActive('traders')"
+             x-transition>
             <!-- API Usage Dashboard Widget -->
             <div class="api-usage-widget">
                 <div class="widget-header">
@@ -172,6 +187,7 @@
                 <div id="traders-list" class="traders-list"></div>
             </div>
         </div>
+        </div> <!-- Close tab-manager -->
     </div>
 
     <!-- Edit Trader Modal -->
@@ -362,6 +378,17 @@
         </div>
     </div>
 
+    <!-- Alpine.js Stores -->
+    <script src="/static/js/stores/traders.js"></script>
+    <script src="/static/js/stores/api-usage.js"></script>
+    <script src="/static/js/stores/ticker-pool.js"></script>
+
+    <!-- Alpine.js Components -->
+    <script src="/static/js/components/tab-manager.js"></script>
+    <script src="/static/js/components/modal-manager.js"></script>
+    <script src="/static/js/components/trader-form.js"></script>
+
+    <!-- Main Application -->
     <script src="/static/app.js"></script>
 </body>
 </html>
