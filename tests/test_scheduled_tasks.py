@@ -264,3 +264,51 @@ def test_all_time_of_day_options_supported(client, app):
             assert response.status_code == 200
             data = response.get_json()
             assert data['status'] == 'success'
+
+
+def test_portfolio_health_check_actual_execution(client, app, db):
+    """
+    Regression test: portfolio health check should work without nested app context errors
+
+    This test calls the actual portfolio_health_check function (not mocked)
+    to ensure it doesn't create conflicting app contexts.
+    """
+    from models import Trader, TraderStatus
+    from decimal import Decimal
+
+    # Create a test trader
+    trader = Trader(
+        name='Health Check Test Trader',
+        status=TraderStatus.ACTIVE,
+        initial_balance=Decimal('10000.00'),
+        current_balance=Decimal('10500.00'),
+        risk_tolerance='medium',
+        trading_timezone='America/New_York'
+    )
+    db.session.add(trader)
+    db.session.commit()
+
+    # Get API key
+    with app.app_context():
+        api_key = os.getenv('SCHEDULER_API_KEY', 'change-me-in-production')
+
+    # Call the endpoint (NOT mocking the task function)
+    response = client.post('/api/scheduled/portfolio-health-check',
+        headers={'X-API-Key': api_key})
+
+    # Should not return 500 error from nested app context
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.get_json()}"
+
+    data = response.get_json()
+    assert data['status'] == 'success'
+    assert 'result' in data
+    assert 'traders' in data['result']
+
+    # Find our test trader in results
+    test_trader_result = next(
+        (t for t in data['result']['traders'] if t['trader_name'] == 'Health Check Test Trader'),
+        None
+    )
+    assert test_trader_result is not None
+    assert test_trader_result['cash_balance'] == 10500.00
+    assert test_trader_result['initial_balance'] == 10000.00

@@ -323,8 +323,12 @@ def portfolio_health_check():
         for trader in traders:
             portfolio = Portfolio.query.filter_by(trader_id=trader.id).all()
 
+            # Use Decimal for all calculations to avoid type mismatch
+            from decimal import Decimal
             portfolio_value = sum(item.total_cost for item in portfolio)
-            total_value = float(trader.current_balance) + portfolio_value
+            total_value = trader.current_balance + Decimal(str(portfolio_value))
+            profit_loss = total_value - trader.initial_balance
+            profit_loss_pct = (profit_loss / trader.initial_balance * 100) if trader.initial_balance > 0 else Decimal('0')
 
             performance = {
                 'trader_id': trader.id,
@@ -333,8 +337,8 @@ def portfolio_health_check():
                 'portfolio_value': float(portfolio_value),
                 'total_value': float(total_value),
                 'initial_balance': float(trader.initial_balance),
-                'profit_loss': float(total_value - trader.initial_balance),
-                'profit_loss_pct': float((total_value - trader.initial_balance) / trader.initial_balance * 100) if trader.initial_balance > 0 else 0,
+                'profit_loss': float(profit_loss),
+                'profit_loss_pct': float(profit_loss_pct),
                 'positions': len(portfolio)
             }
 
