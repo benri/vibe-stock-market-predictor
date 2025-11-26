@@ -1,0 +1,272 @@
+    <div x-data="modalManager()"
+         @keydown.escape.window="handleEscape($event)"
+         @click.self="handleClickOutside($event)"
+         @open-trader-modal.window="openModal('edit-trader', $event.detail)"
+         @open-charts-modal.window="openModal('charts', $event.detail)"
+         @open-ticker-browser.window="openModal('ticker-browser', $event.detail)">
+
+    <!-- Edit Trader Modal -->
+    <div class="modal"
+         x-show="isModalOpen('edit-trader')"
+         x-transition.opacity
+         @click.self="closeModal()">
+        <div class="modal-content modal-wide"
+             x-data="traderForm({ mode: 'edit', traderId: modalData?.traderId })">
+            <span class="close" @click="closeModal()">&times;</span>
+            <h2>Edit Trader</h2>
+
+            <!-- Modal Tab Navigation -->
+            <div x-data="tabManager({ tabs: ['settings', 'watchlist', 'history'], default: 'settings', onTabChange: (tab) => { if (tab === 'watchlist' && modalData?.traderId) { $dispatch('load-watchlist', { traderId: modalData.traderId }); } else if (tab === 'history' && modalData?.traderId) { $dispatch('load-history', { traderId: modalData.traderId }); } } })">
+                <div class="modal-tab-nav">
+                    <button class="modal-tab-btn"
+                            :class="{ 'active': isActive('settings') }"
+                            @click="selectTab('settings')">⚙️ Settings</button>
+                    <button class="modal-tab-btn"
+                            :class="{ 'active': isActive('watchlist') }"
+                            @click="selectTab('watchlist')">📋 Watchlist</button>
+                    <button class="modal-tab-btn"
+                            :class="{ 'active': isActive('history') }"
+                            @click="selectTab('history')">📊 Analysis History</button>
+                </div>
+
+            <!-- Settings Tab -->
+            <div class="modal-tab-content"
+                 x-show="isActive('settings')"
+                 x-transition>
+                <div class="trader-form">
+                    <div class="form-group">
+                        <label>Trader Name</label>
+                        <input type="text" x-model="formData.name" />
+                        <span x-show="errors.name" class="error-text" x-text="errors.name"></span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Risk Tolerance</label>
+                            <select x-model="formData.risk_tolerance">
+                                <option value="low">Low - Conservative</option>
+                                <option value="medium">Medium - Balanced</option>
+                                <option value="high">High - Aggressive</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select x-model="formData.status">
+                                <option value="active">Active</option>
+                                <option value="paused">Paused</option>
+                                <option value="disabled">Disabled</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Trading Timezone / Exchange</label>
+                        <select x-model="formData.trading_timezone">
+                            <option value="America/New_York">🇺🇸 NYSE (New York) - 9:30 AM - 4:00 PM EST</option>
+                            <option value="Europe/London">🇬🇧 LSE (London) - 8:00 AM - 4:30 PM GMT</option>
+                            <option value="Asia/Tokyo">🇯🇵 TSE (Tokyo) - 9:00 AM - 3:00 PM JST</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Trading Ethos / Philosophy</label>
+                        <textarea x-model="formData.trading_ethos" rows="4"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button class="secondary-btn" @click="closeModal()">Cancel</button>
+                        <button class="primary-btn" @click="await submit(); closeModal()" :disabled="loading" x-text="getSubmitButtonText()"></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Watchlist Tab -->
+            <div class="modal-tab-content"
+                 x-show="isActive('watchlist')"
+                 x-transition
+                 x-data="watchlistManager(modalData?.traderId)"
+                 @load-watchlist.window="if ($event.detail.traderId === traderId) loadConfig()">
+                <div class="watchlist-manager">
+                    <div class="watchlist-header">
+                        <h3>Watchlist Configuration</h3>
+                        <div class="watchlist-mode-toggle">
+                            <label class="toggle-switch">
+                                <input type="checkbox" x-model="useCustom">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-label">Use Custom Watchlist</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Analysis Budget (Tickers per Session)</label>
+                        <div class="slider-container">
+                            <input type="range" x-model="watchlistSize" min="3" max="10">
+                            <span x-text="watchlistSize"></span> tickers
+                        </div>
+                        <small>Higher values analyze more stocks but may hit API limits faster</small>
+                    </div>
+
+                    <div x-show="useCustom" x-transition>
+                        <div class="form-group">
+                            <label>Custom Tickers</label>
+                            <div class="ticker-chips">
+                                <template x-for="ticker in customTickers" :key="ticker">
+                                    <div class="ticker-chip">
+                                        <span x-text="ticker"></span>
+                                        <button class="chip-remove" @click="removeTicker(ticker)" title="Remove">×</button>
+                                    </div>
+                                </template>
+                                <div x-show="customTickers.length === 0" class="empty-message">
+                                    No tickers added yet. Click "Add Tickers" to get started.
+                                </div>
+                            </div>
+                            <button class="secondary-btn" @click="openTickerBrowser()">
+                                ➕ Add Tickers
+                            </button>
+                        </div>
+                    </div>
+
+                    <div x-show="!useCustom" x-transition>
+                        <div class="info-box">
+                            <p><strong>🌐 Using Timezone-Based Pool</strong></p>
+                            <p>Randomly selects <span x-text="watchlistSize"></span> tickers each session from your exchange's pool.</p>
+                            <button class="secondary-btn btn-sm" @click="viewTickerPool()">
+                                👁️ View Available Tickers
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="secondary-btn" @click="closeModal()">Cancel</button>
+                        <button class="primary-btn" @click="await saveConfig()" :disabled="loading">Save Watchlist</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis History Tab -->
+            <div class="modal-tab-content"
+                 x-show="isActive('history')"
+                 x-transition
+                 x-data="analysisHistory(modalData?.traderId)"
+                 @load-history.window="if ($event.detail.traderId === traderId) load()">
+                <div class="analysis-history">
+                    <div class="history-header">
+                        <h3>Recent Analysis History</h3>
+                        <button class="icon-btn" @click="load()">🔄</button>
+                    </div>
+                    <div x-show="loading" class="loading-message">Loading...</div>
+                    <div x-show="!loading && history.length === 0" class="empty-message">
+                        No analysis history yet.
+                    </div>
+                    <table x-show="!loading && history.length > 0" class="analysis-history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Ticker</th>
+                                <th>Recommendation</th>
+                                <th>Confidence</th>
+                                <th>Price</th>
+                                <th>Signals</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="item in history" :key="item.id">
+                                <tr>
+                                    <td x-text="new Date(item.created_at).toLocaleString()"></td>
+                                    <td><strong x-text="item.ticker"></strong></td>
+                                    <td><span class="rec-badge" :class="getRecClass(item.recommendation)" x-text="item.recommendation || 'N/A'"></span></td>
+                                    <td x-text="item.confidence ? item.confidence + '%' : 'N/A'"></td>
+                                    <td x-text="item.price ? '$' + item.price.toFixed(2) : 'N/A'"></td>
+                                    <td class="signals-cell" x-text="parseSignals(item.signals)"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            </div> <!-- Close modal tab manager -->
+        </div>
+    </div>
+
+    <!-- Ticker Browser Modal -->
+    <div class="modal"
+         x-show="isModalOpen('ticker-browser')"
+         x-transition.opacity
+         @click.self="closeModal()">
+        <div class="modal-content modal-wide"
+             x-data="{ selectedTickers: new Set(), search: '', sector: '', exchange: '' }"
+             x-init="if (isModalOpen('ticker-browser')) $store.tickerPool.load()">
+            <span class="close" @click="closeModal()">&times;</span>
+            <h2>Browse Ticker Pool</h2>
+
+            <div class="ticker-browser-controls">
+                <input type="text"
+                       x-model="search"
+                       @input="$store.tickerPool.setFilter('search', search)"
+                       placeholder="Search by ticker or name...">
+                <select x-model="sector" @change="$store.tickerPool.setFilter('sector', sector)">
+                    <option value="">All Sectors</option>
+                    <template x-for="s in $store.tickerPool.getSectors()" :key="s">
+                        <option :value="s" x-text="s"></option>
+                    </template>
+                </select>
+                <select x-model="exchange" @change="$store.tickerPool.setFilter('exchange', exchange)">
+                    <option value="">All Exchanges</option>
+                    <template x-for="ex in $store.tickerPool.getExchanges()" :key="ex">
+                        <option :value="ex" x-text="ex"></option>
+                    </template>
+                </select>
+            </div>
+
+            <div class="ticker-grid">
+                <div x-show="$store.tickerPool.loading" class="loading-message">Loading tickers...</div>
+                <template x-for="ticker in $store.tickerPool.getFiltered()" :key="ticker.ticker">
+                    <div class="ticker-card-browser"
+                         :class="{ 'selected': selectedTickers.has(ticker.ticker) }"
+                         @click="selectedTickers.has(ticker.ticker) ? selectedTickers.delete(ticker.ticker) : selectedTickers.add(ticker.ticker)">
+                        <div class="ticker-card-header-browser">
+                            <span class="ticker-symbol-browser" x-text="ticker.ticker"></span>
+                            <span x-show="selectedTickers.has(ticker.ticker)" class="selected-badge">✓</span>
+                        </div>
+                        <div class="ticker-name-browser" x-text="ticker.name || 'N/A'"></div>
+                        <div class="ticker-meta-browser">
+                            <span class="ticker-sector-browser" x-text="ticker.sector || 'N/A'"></span>
+                            <span class="ticker-exchange-browser" x-text="ticker.exchange || 'N/A'"></span>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <div class="ticker-browser-actions">
+                <div class="selected-count">
+                    <span x-text="selectedTickers.size"></span> tickers selected
+                </div>
+                <div class="action-buttons">
+                    <button class="secondary-btn" @click="selectedTickers.clear()">Clear Selection</button>
+                    <button class="secondary-btn" @click="closeModal()">Cancel</button>
+                    <button class="primary-btn" @click="$dispatch('tickers-selected', { tickers: Array.from(selectedTickers) }); closeModal()">Add Selected</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Charts Modal -->
+    <div class="modal"
+         x-show="isModalOpen('charts')"
+         x-transition.opacity
+         @click.self="closeModal()">
+        <div class="modal-content modal-wide"
+             x-data="{ portfolioChart: null, profitLossChart: null }"
+             x-init="$watch(() => activeModal === 'charts', (value) => { if (value && modalData?.trader) { setTimeout(() => { if (typeof renderCharts === 'function') renderCharts(modalData.trader, modalData.history || modalData); }, 100); } })">
+            <span class="close" @click="closeModal(); if(portfolioChart) portfolioChart.destroy(); if(profitLossChart) profitLossChart.destroy()">&times;</span>
+            <h2 x-text="modalData?.trader?.name ? modalData.trader.name + ' - Performance Charts' : 'Trader Performance'"></h2>
+            <div class="charts-container">
+                <div class="chart-wrapper">
+                    <h3>Portfolio Value Over Time</h3>
+                    <canvas id="portfolioChart"></canvas>
+                </div>
+                <div class="chart-wrapper">
+                    <h3>Profit/Loss Over Time</h3>
+                    <canvas id="profitLossChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div> <!-- Close modal-manager -->

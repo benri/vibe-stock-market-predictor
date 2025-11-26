@@ -40,6 +40,35 @@ header h1 {
 .subtitle {
     font-size: 1.2em;
     opacity: 0.95;
+    margin-bottom: 20px;
+}
+
+.header-nav {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.nav-link {
+    padding: 10px 25px;
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s;
+    backdrop-filter: blur(10px);
+}
+
+.nav-link:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-2px);
+}
+
+.nav-link.active {
+    background: white;
+    color: #667eea;
 }
 
 /* ===== Stock Analysis Tab ===== */

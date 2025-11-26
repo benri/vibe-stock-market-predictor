@@ -75,7 +75,13 @@ def require_api_key(f):
 
 @app.route('/')
 def index():
+    """Stock analysis landing page"""
     return render_template('index.html')
+
+@app.route('/traders')
+def traders_page():
+    """Machine traders management page"""
+    return render_template('traders.html')
 
 @app.route('/analyze', methods=['POST'])
 def analyze():

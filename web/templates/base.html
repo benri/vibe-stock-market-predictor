@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Vibe Stock Market Predictor{% endblock %}</title>
+    <link rel="stylesheet" href="/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📈 Vibe Stock Market Predictor</h1>
+            <p class="subtitle">{% block subtitle %}AI-powered trading platform{% endblock %}</p>
+            <nav class="header-nav">
+                <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">Stock Analysis</a>
+                <a href="/traders" class="nav-link {% if request.path == '/traders' %}active{% endif %}">Machine Traders</a>
+            </nav>
+        </header>
+
+        {% block content %}{% endblock %}
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

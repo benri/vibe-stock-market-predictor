@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Machine Traders - Vibe Stock Market Predictor{% endblock %}
+{% block subtitle %}Intelligent autonomous trading agents{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Machine Traders Page -->
+<div x-data="{ init() { $store.traders.load(); $store.apiUsage.startAutoRefresh(); } }">
+    <!-- API Usage Dashboard Widget -->
+    <div class="api-usage-widget" x-data="{ refreshing: false }">
+        <div class="widget-header">
+            <h3>🔌 API Usage Dashboard</h3>
+            <button class="icon-btn"
+                    @click="refreshing = true; await $store.apiUsage.load(); refreshing = false"
+                    title="Refresh">
+                <span :class="{ 'spinning': refreshing }">🔄</span>
+            </button>
+        </div>
+        <div class="widget-content">
+            <div class="usage-summary">
+                <div class="usage-stat">
+                    <div class="usage-label">Today's Usage</div>
+                    <div class="usage-value" x-text="$store.apiUsage.today.calls || 0"></div>
+                </div>
+                <div class="usage-stat">
+                    <div class="usage-label">Remaining</div>
+                    <div class="usage-value" x-text="$store.apiUsage.today.remaining || 0"></div>
+                </div>
+                <div class="usage-stat">
+                    <div class="usage-label">Daily Limit</div>
+                    <div class="usage-value" x-text="$store.apiUsage.today.limit || 25"></div>
+                </div>
+            </div>
+            <div class="usage-progress-container">
+                <div class="usage-progress-label">
+                    <span>Quota Used</span>
+                    <span x-text="Math.round($store.apiUsage.today.percentage_used || 0) + '%'"></span>
+                </div>
+                <div class="usage-progress-bar">
+                    <div class="usage-progress-fill"
+                         :class="$store.apiUsage.getColorClass()"
+                         :style="`width: ${$store.apiUsage.today.percentage_used || 0}%`"></div>
+                </div>
+                <div class="usage-status-message" x-text="$store.apiUsage.getStatusMessage()"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trader Creation Section -->
+    <div class="trader-section" x-data="traderForm({ mode: 'create' })" x-init="showForm = false">
+        <div class="section-header">
+            <h2>🤖 Create New Trader</h2>
+            <button class="primary-btn" @click="showForm = true">+ New Trader</button>
+        </div>
+
+        <!-- Create Trader Form (Initially Hidden) -->
+        <div class="trader-form" x-show="showForm" x-transition x-cloak>
+            <div class="form-group">
+                <label>Trader Name</label>
+                <input type="text" x-model="formData.name" placeholder="e.g., Bullish Betty, Cautious Carl" />
+                <span x-show="errors.name" class="error-text" x-text="errors.name"></span>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Initial Balance ($)</label>
+                    <input type="number" x-model="formData.initial_balance" min="100" step="100" />
+                    <span x-show="errors.initial_balance" class="error-text" x-text="errors.initial_balance"></span>
+                </div>
+                <div class="form-group">
+                    <label>Risk Tolerance</label>
+                    <select x-model="formData.risk_tolerance">
+                        <option value="low">Low - Conservative</option>
+                        <option value="medium">Medium - Balanced</option>
+                        <option value="high">High - Aggressive</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Trading Timezone / Exchange</label>
+                <select x-model="formData.trading_timezone">
+                    <option value="America/New_York">🇺🇸 NYSE (New York) - 9:30 AM - 4:00 PM EST</option>
+                    <option value="Europe/London">🇬🇧 LSE (London) - 8:00 AM - 4:30 PM GMT</option>
+                    <option value="Asia/Tokyo">🇯🇵 TSE (Tokyo) - 9:00 AM - 3:00 PM JST</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Trading Ethos / Philosophy</label>
+                <textarea x-model="formData.trading_ethos" rows="4" placeholder="Describe this trader's philosophy, personality, and approach...&#10;&#10;Examples:&#10;- Bullish on tech stocks, focuses on growth companies&#10;- Bearish market outlook, prefers safe defensive stocks&#10;- Contrarian investor, buys when others panic&#10;- Momentum trader, rides the wave of trending stocks"></textarea>
+            </div>
+            <div class="form-actions">
+                <button class="secondary-btn" @click="showForm = false; reset()">Cancel</button>
+                <button class="primary-btn" @click="await submit(); showForm = false" :disabled="loading" x-text="getSubmitButtonText()"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Traders List Section -->
+    <div class="trader-section">
+        <div class="section-header">
+            <h2>📊 Active Traders</h2>
+            <button class="secondary-btn" @click="$store.traders.load()">🔄 Refresh</button>
+        </div>
+
+        <div class="loading" x-show="$store.traders.loading">
+            <div class="spinner"></div>
+            <p>Loading traders...</p>
+        </div>
+
+        <div class="traders-list">
+            <template x-for="trader in $store.traders.list" :key="trader.id">
+                <div class="trader-card" :class="trader.status" x-data="traderCard(trader)">
+                    <div class="trader-header">
+                        <div class="trader-info">
+                            <h3 x-text="trader.name"></h3>
+                            <div class="trader-badges">
+                                <span class="trader-status" :class="trader.status" x-text="trader.status"></span>
+                                <span class="watchlist-badge"
+                                      :class="trader.use_custom_watchlist ? 'custom' : 'pool'"
+                                      x-text="trader.use_custom_watchlist ? `📋 Custom: ${(trader.custom_watchlist || []).length} tickers` : `🌐 Pool: ${trader.watchlist_size || 6} tickers`"></span>
+                            </div>
+                        </div>
+                        <div class="trader-actions">
+                            <button class="icon-btn" @click="editTrader()" title="Edit Trader">✏️ Edit</button>
+                            <button class="icon-btn" @click="viewDetails()" title="View Details">📊 Details</button>
+                            <button class="icon-btn" @click="deleteTrader()" title="Delete Trader">🗑️ Delete</button>
+                        </div>
+                    </div>
+                    <div class="trader-stats">
+                        <div class="stat">
+                            <div class="stat-label">Cash Balance</div>
+                            <div class="stat-value" x-text="'$' + trader.current_balance.toLocaleString()"></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Portfolio Value</div>
+                            <div class="stat-value" x-text="'$' + trader.portfolio_value.toLocaleString()"></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Total Value</div>
+                            <div class="stat-value" x-text="'$' + trader.total_value.toLocaleString()"></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Unrealized P/L</div>
+                            <div class="stat-value" :class="trader.unrealized_pl >= 0 ? 'positive' : 'negative'" x-text="(trader.unrealized_pl >= 0 ? '▲' : '▼') + ' $' + Math.abs(trader.unrealized_pl).toLocaleString()"></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Total P/L</div>
+                            <div class="stat-value" :class="trader.profit_loss >= 0 ? 'positive' : 'negative'" x-text="(trader.profit_loss >= 0 ? '▲' : '▼') + ' $' + Math.abs(trader.profit_loss).toLocaleString()"></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Total Return</div>
+                            <div class="stat-value" :class="trader.profit_loss >= 0 ? 'positive' : 'negative'" x-text="trader.profit_loss_percentage.toFixed(2) + '%'"></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Trades (Buy/Sell)</div>
+                            <div class="stat-value" x-text="trader.buy_trades + '/' + trader.sell_trades"></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Win Rate</div>
+                            <div class="stat-value" :class="trader.win_rate >= 50 ? 'positive' : 'negative'" x-text="trader.win_rate.toFixed(1) + '%'"></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Risk Tolerance</div>
+                            <div class="stat-value" x-text="trader.risk_tolerance.charAt(0).toUpperCase() + trader.risk_tolerance.slice(1)"></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Trading Exchange</div>
+                            <div class="stat-value" x-text="trader.trading_timezone?.includes('New_York') ? '🇺🇸 NYSE' : trader.trading_timezone?.includes('London') ? '🇬🇧 LSE' : trader.trading_timezone?.includes('Tokyo') ? '🇯🇵 TSE' : '🇺🇸 NYSE'"></div>
+                        </div>
+                    </div>
+                    <div class="trader-ethos" x-show="trader.trading_ethos">
+                        <h4>Trading Philosophy</h4>
+                        <p x-text="trader.trading_ethos"></p>
+                    </div>
+                </div>
+            </template>
+            <div x-show="!$store.traders.loading && $store.traders.list.length === 0" class="error">
+                No traders found. Create your first trader to get started!
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals (Edit, Ticker Browser, Charts) - Included via component script -->
+    {% include 'traders_modals.html' %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Alpine.js Stores -->
+<script src="/js/stores/traders.js"></script>
+<script src="/js/stores/api-usage.js"></script>
+<script src="/js/stores/ticker-pool.js"></script>
+
+<!-- Alpine.js Components -->
+<script src="/js/components/tab-manager.js"></script>
+<script src="/js/components/modal-manager.js"></script>
+<script src="/js/components/trader-form.js"></script>
+<script src="/js/components/trader-card.js"></script>
+<script src="/js/components/watchlist-manager.js"></script>
+<script src="/js/components/analysis-history.js"></script>
+
+<!-- Main Application -->
+<script src="/app.js"></script>
+{% endblock %}
