@@ -10,7 +10,7 @@
 
 {% block content %}
 <!-- Machine Traders Page -->
-<div x-data="{ init() { $store.traders.load(); $store.apiUsage.startAutoRefresh(); } }">
+<div x-init="$store.traders.load(); $store.apiUsage.startAutoRefresh();">
     <!-- API Usage Dashboard Widget -->
     <div class="api-usage-widget" x-data="{ refreshing: false }">
         <div class="widget-header">
