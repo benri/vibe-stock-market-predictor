@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 # API Key for scheduled tasks
 SCHEDULER_API_KEY = os.getenv('SCHEDULER_API_KEY', 'change-me-in-production')
 
-app = Flask(__name__)
+app = Flask(__name__,
+            static_folder='web',
+            static_url_path='',
+            template_folder='web/templates')
 
 # Database configuration
 DATABASE_URL = os.getenv('DATABASE_URL')

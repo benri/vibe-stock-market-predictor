@@ -9,8 +9,8 @@ on:
       - main
 
 jobs:
-  test:
-    name: Run Tests
+  backend-tests:
+    name: Backend Tests
     runs-on: ubuntu-latest
 
     steps:
@@ -28,6 +28,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests with pytest
+      - name: Run backend tests with pytest
         run: |
-          pytest tests/ -v --cov=. --cov-report=term-missing
+          pytest tests/ -v --cov=. --cov-report=term-missing --ignore=tests/frontend
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package.json
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: web
+
+      - name: Run frontend tests with Jest
+        run: npm test
+        working-directory: web
