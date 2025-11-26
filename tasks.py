@@ -313,12 +313,13 @@ def portfolio_health_check():
     """
     from app import app
     from models import db, Trader, Portfolio
+    from src.models.schemas import TraderPerformance, PortfolioHealthCheckResult
 
     with app.app_context():
         logger.info("Starting portfolio health check")
 
         traders = Trader.query.all()
-        results = []
+        trader_performances = []
 
         for trader in traders:
             portfolio = Portfolio.query.filter_by(trader_id=trader.id).all()
@@ -330,26 +331,29 @@ def portfolio_health_check():
             profit_loss = total_value - trader.initial_balance
             profit_loss_pct = (profit_loss / trader.initial_balance * 100) if trader.initial_balance > 0 else Decimal('0')
 
-            performance = {
-                'trader_id': trader.id,
-                'trader_name': trader.name,
-                'cash_balance': float(trader.current_balance),
-                'portfolio_value': float(portfolio_value),
-                'total_value': float(total_value),
-                'initial_balance': float(trader.initial_balance),
-                'profit_loss': float(profit_loss),
-                'profit_loss_pct': float(profit_loss_pct),
-                'positions': len(portfolio)
-            }
+            # Create Pydantic model (automatic Decimal→float serialization)
+            performance = TraderPerformance(
+                trader_id=trader.id,
+                trader_name=trader.name,
+                cash_balance=trader.current_balance,
+                portfolio_value=portfolio_value,
+                total_value=total_value,
+                initial_balance=trader.initial_balance,
+                profit_loss=profit_loss,
+                profit_loss_pct=profit_loss_pct,
+                positions=len(portfolio)
+            )
 
-            results.append(performance)
-            logger.info(f"{trader.name}: Total value ${total_value:.2f}, P&L: {performance['profit_loss_pct']:.2f}%")
+            trader_performances.append(performance)
+            logger.info(f"{trader.name}: Total value ${total_value:.2f}, P&L: {float(profit_loss_pct):.2f}%")
 
-        return {
-            'status': 'success',
-            'timestamp': datetime.utcnow().isoformat(),
-            'traders': results
-        }
+        # Create response model
+        result = PortfolioHealthCheckResult(
+            timestamp=datetime.utcnow().isoformat(),
+            traders=trader_performances
+        )
+
+        return result.model_dump()
 
 
 def update_portfolio_prices():

@@ -81,15 +81,17 @@ The Hybrid Dynamic Watchlist System enables traders to analyze a broad pool of s
 
 ### Setup & Migration
 
-1. **Run the migration:**
+The watchlist system tables are automatically created via Flask-Migrate.
+
+1. **Apply migrations:**
 ```bash
-python migrate_watchlist_system.py
+mise exec -- flask db upgrade
 ```
 
-This will:
-- Add custom watchlist fields to traders table
-- Create new tables (ticker_pool, ticker_rotation, api_usage_log)
-- Seed initial ticker data
+This creates:
+- Custom watchlist fields in traders table
+- New tables (ticker_pool, ticker_rotation, api_usage_log)
+- See `migrations/` folder for all schema changes
 
 2. **Update ticker pools (optional):**
 ```bash

@@ -6,12 +6,8 @@ set -e
 
 echo "🚀 Running Heroku release phase..."
 
-# Run database migrations first
+# Run database migrations using Flask-Migrate
 echo "🔄 Running database migrations..."
-python migrate_db.py
-
-# Run database setup (creates tables if they don't exist)
-echo "📊 Setting up database tables..."
-python setup_db.py || echo "⚠️  Setup encountered an issue, but migrations ran successfully"
+flask db upgrade
 
 echo "✅ Release phase complete!"

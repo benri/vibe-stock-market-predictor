@@ -210,6 +210,10 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
+# Flask-Migrate / Alembic
+# Keep migrations folder but ignore __pycache__
+migrations/__pycache__/
+
 # Scrapy stuff:
 .scrapy
 

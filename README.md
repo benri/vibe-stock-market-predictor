@@ -81,14 +81,17 @@ Create and manage virtual traders with unique personalities:
    # Create the PostgreSQL database
    ./create_db.sh
 
-   # Set up database tables
-   python setup_db.py
+   # Run database migrations
+   mise exec -- flask db upgrade
+
+   # (Optional) Seed with sample data
+   mise exec -- python seed_data.py
    ```
 
    Or manually:
    ```bash
    createdb vibe-stock-market-predictor-development
-   python setup_db.py
+   mise exec -- flask db upgrade
    ```
 
 5. **Run the application**
@@ -217,28 +220,36 @@ vibe-stock-market-predictor/
 ├── runtime.txt            # Python version
 ├── .env.example           # Environment variables template
 ├── CLAUDE.md              # Technical documentation for developers
+├── MIGRATIONS.md          # Database migration guide
 ├── README.md              # This file
 ├── create_db.sh           # Database creation script
-├── setup_db.py            # Database initialization script
 ├── release.sh             # Heroku release phase script
-├── static/
-│   ├── app.js            # Frontend JavaScript
-│   └── style.css         # Styling and animations
-└── templates/
-    └── index.html        # Main HTML template
+├── migrations/            # Flask-Migrate database migrations
+├── src/                   # Backend services and utilities
+│   ├── services/         # Business logic services
+│   ├── models/           # Pydantic schemas
+│   └── config/           # Configuration files
+├── web/                   # Frontend files
+│   ├── templates/        # Jinja2 HTML templates
+│   ├── js/              # JavaScript components
+│   └── style.css        # Styling and animations
+└── tests/                # Test suite
 ```
 
-### Database Setup Scripts
+### Database Migrations
+
+This project uses **Flask-Migrate** (Alembic) for database schema management:
 
 - **create_db.sh**: Creates the PostgreSQL database for local development
   - Interactive script that checks if database exists
   - Prompts before dropping existing database
   - Works on macOS and Linux
 
-- **setup_db.py**: Initializes database tables and schema
-  - Creates all tables defined in models.py
-  - Shows database statistics after setup
-  - Provides helpful next-step instructions
+- **Flask-Migrate**: Industry-standard migration system
+  - `flask db migrate -m "message"` - Generate migrations from model changes
+  - `flask db upgrade` - Apply migrations to database
+  - `flask db downgrade` - Rollback migrations
+  - See `MIGRATIONS.md` for detailed guide
 
 - **release.sh**: Heroku release phase script
   - Runs automatically during deployment
