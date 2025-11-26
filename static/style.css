@@ -1398,3 +1398,28 @@ input:checked + .toggle-slider:before {
         max-height: 250px;
     }
 }
+
+/* Alpine.js Additions */
+.spinning {
+    display: inline-block;
+    animation: spin 0.5s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.error-text {
+    color: #ef4444;
+    font-size: 12px;
+    margin-top: 4px;
+    display: block;
+}
+
+.empty-message {
+    text-align: center;
+    padding: 20px;
+    color: #999;
+    font-style: italic;
+}

@@ -1139,3 +1139,173 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     };
 });
+
+// ========================================
+// CHART RENDERING (for Alpine modals)
+// ========================================
+
+let portfolioChartGlobal = null;
+let profitLossChartGlobal = null;
+
+function renderCharts(trader, history) {
+    // Destroy previous chart instances if they exist
+    if (portfolioChartGlobal) {
+        portfolioChartGlobal.destroy();
+        portfolioChartGlobal = null;
+    }
+    if (profitLossChartGlobal) {
+        profitLossChartGlobal.destroy();
+        profitLossChartGlobal = null;
+    }
+
+    // Create Portfolio Value Chart
+    const portfolioCtx = document.getElementById('portfolioChart').getContext('2d');
+    portfolioChartGlobal = new Chart(portfolioCtx, {
+        type: 'line',
+        data: {
+            labels: history.labels,
+            datasets: [
+                {
+                    label: 'Cash Balance',
+                    data: history.balance,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Portfolio Value',
+                    data: history.portfolio_value,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Total Value',
+                    data: history.total_value,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.4,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            label += '$' + context.parsed.y.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    ticks: {
+                        callback: function(value) {
+                            return '$' + value.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Create Profit/Loss Chart
+    const profitLossCtx = document.getElementById('profitLossChart').getContext('2d');
+    
+    profitLossChartGlobal = new Chart(profitLossCtx, {
+        type: 'line',
+        data: {
+            labels: history.labels,
+            datasets: [
+                {
+                    label: 'Profit/Loss',
+                    data: history.profit_loss,
+                    borderColor: function(context) {
+                        const value = context.parsed?.y;
+                        return value >= 0 ? '#10b981' : '#ef4444';
+                    },
+                    backgroundColor: function(context) {
+                        const value = context.parsed?.y;
+                        return value >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+                    },
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    segment: {
+                        borderColor: function(ctx) {
+                            return ctx.p1.parsed.y >= 0 ? '#10b981' : '#ef4444';
+                        },
+                        backgroundColor: function(ctx) {
+                            return ctx.p1.parsed.y >= 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+                        }
+                    }
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            const value = context.parsed.y;
+                            label += (value >= 0 ? '+' : '') + '$' + value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                            return label;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    ticks: {
+                        callback: function(value) {
+                            return (value >= 0 ? '+' : '') + '$' + value.toLocaleString();
+                        }
+                    },
+                    grid: {
+                        color: function(context) {
+                            if (context.tick.value === 0) {
+                                return '#000';
+                            }
+                            return 'rgba(0, 0, 0, 0.1)';
+                        },
+                        lineWidth: function(context) {
+                            if (context.tick.value === 0) {
+                                return 2;
+                            }
+                            return 1;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
