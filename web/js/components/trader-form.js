@@ -26,6 +26,7 @@ function traderForm(config = {}) {
         // State
         loading: false,
         errors: {},
+        showForm: false, // For create mode - controls form visibility
 
         // Initialize
         async init() {
@@ -122,6 +123,9 @@ function traderForm(config = {}) {
                 status: 'active'
             };
             this.errors = {};
+            if (this.mode === 'create') {
+                this.showForm = false;
+            }
         },
 
         // Get button text based on mode

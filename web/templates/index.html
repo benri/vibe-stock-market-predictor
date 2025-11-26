@@ -124,14 +124,14 @@
             </div>
 
             <!-- Trader Creation Section -->
-            <div class="trader-section" x-data="traderForm({ mode: 'create' })">
+            <div class="trader-section" x-data="traderForm({ mode: 'create' })" x-init="showForm = false">
                 <div class="section-header">
                     <h2>🤖 Create New Trader</h2>
-                    <button class="primary-btn" @click="$el.closest('.trader-section').querySelector('.trader-form').style.display = 'block'">+ New Trader</button>
+                    <button class="primary-btn" @click="showForm = true">+ New Trader</button>
                 </div>
 
                 <!-- Create Trader Form (Initially Hidden) -->
-                <div class="trader-form" style="display: none;" x-show="true" x-transition>
+                <div class="trader-form" x-show="showForm" x-transition x-cloak>
                     <div class="form-group">
                         <label>Trader Name</label>
                         <input type="text" x-model="formData.name" placeholder="e.g., Bullish Betty, Cautious Carl" />
@@ -165,8 +165,8 @@
                         <textarea x-model="formData.trading_ethos" rows="4" placeholder="Describe this trader's philosophy, personality, and approach...&#10;&#10;Examples:&#10;- Bullish on tech stocks, focuses on growth companies&#10;- Bearish market outlook, prefers safe defensive stocks&#10;- Contrarian investor, buys when others panic&#10;- Momentum trader, rides the wave of trending stocks"></textarea>
                     </div>
                     <div class="form-actions">
-                        <button class="secondary-btn" @click="$el.closest('.trader-form').style.display = 'none'; reset()">Cancel</button>
-                        <button class="primary-btn" @click="await submit(); $el.closest('.trader-form').style.display = 'none'" :disabled="loading" x-text="getSubmitButtonText()"></button>
+                        <button class="secondary-btn" @click="showForm = false; reset()">Cancel</button>
+                        <button class="primary-btn" @click="await submit(); showForm = false" :disabled="loading" x-text="getSubmitButtonText()"></button>
                     </div>
                 </div>
             </div>
@@ -516,7 +516,7 @@
          @click.self="closeModal()">
         <div class="modal-content modal-wide"
              x-data="{ portfolioChart: null, profitLossChart: null }"
-             x-init="$watch('isModalOpen(\'charts\')', value => { if (value && modalData?.trader) renderCharts(modalData.trader, modalData.history); })">
+             x-init="$watch(() => activeModal === 'charts', (value) => { if (value && modalData?.trader) { setTimeout(() => { if (typeof renderCharts === 'function') renderCharts(modalData.trader, modalData.history || modalData); }, 100); } })">
             <span class="close" @click="closeModal(); if(portfolioChart) portfolioChart.destroy(); if(profitLossChart) profitLossChart.destroy()">&times;</span>
             <h2 x-text="modalData?.trader?.name ? modalData.trader.name + ' - Performance Charts' : 'Trader Performance'"></h2>
             <div class="charts-container">

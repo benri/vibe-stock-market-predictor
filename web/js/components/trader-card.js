@@ -18,6 +18,8 @@ function traderCard(trader) {
         // View performance details
         async viewDetails() {
             try {
+                console.log('viewDetails called for trader:', trader.id);
+
                 const [traderRes, historyRes] = await Promise.all([
                     fetch(`/api/traders/${trader.id}`),
                     fetch(`/api/traders/${trader.id}/performance-history`)
@@ -26,8 +28,17 @@ function traderCard(trader) {
                 const traderData = await traderRes.json();
                 const history = await historyRes.json();
 
-                this.$dispatch('open-charts-modal', { trader: traderData, history });
+                console.log('Trader data:', traderData);
+                console.log('History data:', history);
+
+                // Dispatch event with trader and history data
+                console.log('Dispatching open-charts-modal event');
+                this.$dispatch('open-charts-modal', {
+                    trader: traderData,
+                    history: history
+                });
             } catch (error) {
+                console.error('Error loading trader charts:', error);
                 alert('Error loading trader charts: ' + error.message);
             }
         },

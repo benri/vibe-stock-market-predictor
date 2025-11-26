@@ -4,6 +4,11 @@
     box-sizing: border-box;
 }
 
+/* Alpine.js cloak - hides elements until Alpine is loaded */
+[x-cloak] {
+    display: none !important;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -398,11 +403,10 @@ header h1 {
 
 /* Tab Content */
 .tab-content {
-    display: none;
-    animation: fadeIn 0.3s;
 }
 
 .tab-content.active {
+    /* Legacy support - not used with Alpine.js but kept for compatibility */
     display: block;
 }
 
@@ -701,7 +705,6 @@ header h1 {
 
 /* Modal */
 .modal {
-    display: none;
     position: fixed;
     z-index: 1000;
     left: 0;
@@ -709,7 +712,6 @@ header h1 {
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.6);
-    animation: fadeIn 0.3s;
 }
 
 .modal-content {
@@ -889,12 +891,7 @@ header h1 {
 }
 
 .modal-tab-content {
-    display: none;
-    animation: fadeIn 0.3s;
-}
-
-.modal-tab-content.active {
-    display: block;
+    /* Alpine x-show controls visibility */
 }
 
 /* ===== Watchlist Components ===== */

@@ -17,6 +17,8 @@ function modalManager() {
 
         // Open a modal
         openModal(modalName, data = null) {
+            console.log('openModal called:', modalName, data);
+
             // Close existing modal if any
             if (this.activeModal) {
                 this.modalHistory.push(this.activeModal);
@@ -24,6 +26,8 @@ function modalManager() {
 
             this.activeModal = modalName;
             this.modalData = data;
+
+            console.log('Modal state set:', this.activeModal, this.modalData);
 
             // Prevent body scroll when modal is open
             document.body.style.overflow = 'hidden';
